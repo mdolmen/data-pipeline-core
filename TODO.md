@@ -91,11 +91,13 @@ through the SDK. No resilience, minimal obs — just the spine.
 
 ## Phase 4 — Resilience
 
-- [ ] `ingestion/http.py` — instrumented httpx client: retry, jitter, UA rotation
-- [ ] `ingestion/circuit_breaker.py` — per-source breaker, configurable halt
-      (default 15 min) on repeated 429s
-- [ ] `WorkerApp` integrates breaker + http client into the run loop
-- [ ] **Betting:** worker survives an injected 429 storm; breaker state metric flips
+- [x] `ingestion/http.py` — instrumented httpx client: retry, jitter, UA rotation
+- [x] `ingestion/circuit_breaker.py` — per-source breaker, configurable halt
+      (default 15 min) on repeated 429s _(in-memory per run; cross-run
+      persistence is Phase 5)_
+- [x] `WorkerApp` integrates breaker + http client into the run loop
+      (exposed to the source as `ctx.http`)
+- [x] **Betting:** worker survives an injected 429 storm; breaker state metric flips
 
 ## Phase 5 — IP guard & proxy (generic mechanism, betting-tuned defaults)
 

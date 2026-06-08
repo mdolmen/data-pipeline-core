@@ -10,6 +10,14 @@ is cut.
 
 ### Added
 
+- **Phase 4 — resilience.** `ingestion/http.py` — an instrumented httpx client
+  (retry with full-jitter backoff on network/5xx, User-Agent rotation, per-status
+  metrics, request counting → `request_rate`) exposed to the source as
+  `ctx.http`; a 429 feeds the breaker (not retried) and an open breaker raises
+  `CircuitOpenError`. `ingestion/circuit_breaker.py` — per-source breaker that
+  opens after N consecutive 429s and halts for a cooldown (default 15 min),
+  flipping `circuit_breaker_state`. `WorkerApp` builds and wires both. New
+  `Settings`: HTTP timeout/retries/backoff/UA list, breaker threshold/cooldown.
 - **Phase 3 — observability.** `obs/metrics.py` declares the standard series
   (`worker_up`, `request_rate`, `http_status_total{code}`,
   `ingestion_lag_seconds`, `circuit_breaker_state`, `proxy_usage_ratio`) with
@@ -52,6 +60,11 @@ Polytricks instance — see `TODO.md`.
 | Standard metric series (names + labels) | SDK, frozen surface | Shared Grafana dashboards across consumers; renaming/relabeling is forbidden. Series whose mechanism is unbuilt are declared at 0. |
 | Metrics push transport | PushGateway built; GMP remote-write/OTLP deferred | The preferred transport needs a real GCP target to verify; the push-at-exit mechanism is generic, the transport is config. |
 | Push failures | Swallowed (logged), never fail the run | Observability must not break ingestion. |
+| HTTP client + circuit breaker | SDK, on `ctx.http` | Generic ingestion plumbing; the `fetch()` that uses it stays in the project. |
+| Retry/backoff/UA list, breaker threshold/cooldown | SDK, config defaults | Mechanism generic, values betting-tuned and overridable (Polytricks can loosen them). |
+| 429 handling | Recorded with breaker, not retried | Retrying a rate-limit signal worsens it; the breaker is the correct response. |
+| `CircuitOpenError` on open breaker | SDK raises; source decides | The project's `fetch()` owns the loop, so it chooses to stop/partial-yield — the SDK doesn't impose a policy. |
+| Breaker cross-run persistence | Deferred to Phase 5 (Redis) | In-memory per run is enough to validate the mechanism; surviving restarts needs the Redis store. |
 | `dlt` (load layer) | SDK, runtime dep | Generic schema-inference + parquet load behind `dlt_sink`; the canonical/business schema stays in the project. |
 | Destination (`file://` vs `gs://`) | SDK, config-driven | One `dlt_sink`; local vs GCS is dlt config (`DESTINATION__FILESYSTEM__BUCKET_URL`), not a code fork. |
 | `WorkerApp(source, sink)` signature | SDK, minimal | `transform=` / `settings=` are deferred to their phases (6 / 2) as non-breaking optional params, not added speculatively. |
