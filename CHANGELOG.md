@@ -10,6 +10,14 @@ is cut.
 
 ### Added
 
+- **Phase 3 — observability.** `obs/metrics.py` declares the standard series
+  (`worker_up`, `request_rate`, `http_status_total{code}`,
+  `ingestion_lag_seconds`, `circuit_breaker_state`, `proxy_usage_ratio`) with
+  fixed names + labels — the stable surface Grafana depends on. `obs/gmp_push.py`
+  pushes the run's registry at exit (PushGateway transport) and never fails the
+  run. `WorkerApp` builds a per-run registry, sets `worker_up`, and pushes in a
+  `finally`. `prometheus-client` is now a runtime dependency. `Settings` gains
+  `metrics_push_gateway`.
 - **Phase 2 — config & structured logging.** `Settings` (pydantic-settings)
   for generic runtime config (log level/format), env/`.env` driven and meant to
   be subclassed per project. `structlog` JSON logging to stdout (console option
@@ -40,7 +48,10 @@ Polytricks instance — see `TODO.md`.
 | Item | Decision | Rationale |
 |---|---|---|
 | Runtime dependencies | Deferred — added per phase | Tracer-bullet, bottom-up; avoid speculative weight. The package ships with only what a real consumer demands (e.g. `dlt` in Phase 1, `prometheus-client` in Phase 3). |
-| `prometheus-client` | Dev-only for now | Only used by the Phase-0 test registry fixture; promotes to a runtime dep when `obs/metrics.py` lands (Phase 3). |
+| `prometheus-client` | SDK, runtime dep (Phase 3) | Promoted from dev once `obs/metrics.py` shipped, as planned. |
+| Standard metric series (names + labels) | SDK, frozen surface | Shared Grafana dashboards across consumers; renaming/relabeling is forbidden. Series whose mechanism is unbuilt are declared at 0. |
+| Metrics push transport | PushGateway built; GMP remote-write/OTLP deferred | The preferred transport needs a real GCP target to verify; the push-at-exit mechanism is generic, the transport is config. |
+| Push failures | Swallowed (logged), never fail the run | Observability must not break ingestion. |
 | `dlt` (load layer) | SDK, runtime dep | Generic schema-inference + parquet load behind `dlt_sink`; the canonical/business schema stays in the project. |
 | Destination (`file://` vs `gs://`) | SDK, config-driven | One `dlt_sink`; local vs GCS is dlt config (`DESTINATION__FILESYSTEM__BUCKET_URL`), not a code fork. |
 | `WorkerApp(source, sink)` signature | SDK, minimal | `transform=` / `settings=` are deferred to their phases (6 / 2) as non-breaking optional params, not added speculatively. |

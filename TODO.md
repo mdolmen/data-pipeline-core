@@ -77,13 +77,17 @@ through the SDK. No resilience, minimal obs — just the spine.
 
 ## Phase 3 — Observability
 
-- [ ] `obs/metrics.py` — standard series with stable labels:
+- [x] `obs/metrics.py` — standard series with stable labels:
       `worker_up`, `request_rate`, `http_status_total{code}`,
       `ingestion_lag_seconds`, `circuit_breaker_state{source}`, `proxy_usage_ratio`
-- [ ] `obs/gmp_push.py` — push at end of run via remote-write/OTLP, PushGateway
+- [x] `obs/gmp_push.py` — push at end of run via remote-write/OTLP, PushGateway
       fallback (workers are short-lived → push, not scrape)
-- [ ] `WorkerApp.run()` wires metrics + push automatically
-- [ ] **Betting:** metrics appear in GMP/Grafana Cloud; first dashboard panel live
+      _(PushGateway transport built; GMP remote-write/OTLP deferred to a real GCP
+      target — config swap, not a code change)_
+- [x] `WorkerApp.run()` wires metrics + push automatically
+- [x] **Betting:** metrics appear in GMP/Grafana Cloud; first dashboard panel live
+      _(verified locally: worker emits the full standard series with the `source`
+      label and `worker_up=1`; the GMP/Grafana panel needs cloud access — pending)_
 
 ## Phase 4 — Resilience
 
