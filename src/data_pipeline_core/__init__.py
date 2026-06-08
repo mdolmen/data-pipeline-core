@@ -9,6 +9,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from data_pipeline_core.runtime.app import WorkerApp
+from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.storage.dlt_sink import dlt_sink
 from data_pipeline_core.storage.protocols import Record, Sink, Source, WriteResult
@@ -21,6 +22,7 @@ except PackageNotFoundError:  # pragma: no cover - source tree without install
 __all__ = [
     "Record",
     "RunContext",
+    "Settings",
     "Sink",
     "Source",
     "WorkerApp",

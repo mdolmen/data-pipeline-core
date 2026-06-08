@@ -14,7 +14,16 @@ from collections.abc import Iterator
 
 import fakeredis
 import pytest
+import structlog
 from prometheus_client import CollectorRegistry
+
+
+@pytest.fixture(autouse=True)
+def _reset_structlog() -> Iterator[None]:
+    """Reset structlog's global config + logger cache so tests don't bleed."""
+    structlog.reset_defaults()
+    yield
+    structlog.reset_defaults()
 
 
 @pytest.fixture
