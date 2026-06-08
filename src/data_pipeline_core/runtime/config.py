@@ -39,3 +39,13 @@ class Settings(BaseSettings):
     # Circuit breaker: open after N consecutive 429s, halt for the cooldown.
     circuit_breaker_threshold: int = 5
     circuit_breaker_cooldown_seconds: float = 900.0
+
+    # IP guard & proxy. redis_url None → guard disabled (always Safe). proxy
+    # disabled by default-off config (Polytricks) keeps only retry/jitter.
+    redis_url: str | None = None
+    proxy_url: str | None = None
+    proxy_enabled: bool = True
+    ip_guard_warning_at: int = 300
+    ip_guard_aggressive_at: int = 500
+    ip_guard_window_seconds: int = 3600
+    warning_jitter_seconds: float = 0.5

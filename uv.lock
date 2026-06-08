@@ -407,6 +407,7 @@ dependencies = [
     { name = "dlt", extra = ["filesystem", "parquet"] },
     { name = "prometheus-client" },
     { name = "pydantic-settings" },
+    { name = "redis" },
     { name = "structlog" },
 ]
 
@@ -425,6 +426,7 @@ requires-dist = [
     { name = "dlt", extras = ["filesystem", "parquet"], specifier = ">=1,<2" },
     { name = "prometheus-client", specifier = ">=0.20" },
     { name = "pydantic-settings", specifier = ">=2,<3" },
+    { name = "redis", specifier = ">=5" },
     { name = "structlog", specifier = ">=24" },
 ]
 

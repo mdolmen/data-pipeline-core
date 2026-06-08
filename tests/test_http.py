@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fakeredis
 import httpx
 import pytest
 from prometheus_client import CollectorRegistry
@@ -9,11 +10,16 @@ from pytest_httpx import HTTPXMock
 
 from data_pipeline_core.ingestion.circuit_breaker import CircuitBreaker
 from data_pipeline_core.ingestion.http import CircuitOpenError, HttpClient
+from data_pipeline_core.ingestion.ip_guard import IpGuard
+from data_pipeline_core.ingestion.proxy import ProxyRouter
 from data_pipeline_core.obs.metrics import StandardMetrics
 from data_pipeline_core.runtime.config import Settings
 
 
 def _client(
+    *,
+    ip_guard: IpGuard | None = None,
+    proxy: ProxyRouter | None = None,
     **overrides: object,
 ) -> tuple[HttpClient, CircuitBreaker, CollectorRegistry]:
     registry = CollectorRegistry()
@@ -25,9 +31,24 @@ def _client(
         settings=settings,
         breaker=breaker,
         metrics=metrics,
+        ip_guard=ip_guard,
+        proxy=proxy,
         sleep=lambda _: None,  # no real backoff sleeps in tests
     )
     return client, breaker, registry
+
+
+def _aggressive_guard() -> IpGuard:
+    redis_client = fakeredis.FakeStrictRedis()
+    redis_client.set("ratelimit:s:0", 500)  # already at the Aggressive threshold
+    return IpGuard(
+        "s",
+        redis_client,
+        warning_at=300,
+        aggressive_at=500,
+        window_seconds=3600,
+        clock=lambda: 0.0,
+    )
 
 
 def test_retries_5xx_then_succeeds(httpx_mock: HTTPXMock) -> None:
@@ -92,3 +113,31 @@ def test_retries_transport_error_then_raises(httpx_mock: HTTPXMock) -> None:
 
     with pytest.raises(httpx.ConnectError):
         client.get("https://api.test/odds")
+
+
+def test_aggressive_mode_routes_via_proxy(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(status_code=200)
+    proxy = ProxyRouter(
+        proxy_url="http://proxy:8000", enabled=True, timeout_seconds=30.0
+    )
+    client, _, _ = _client(ip_guard=_aggressive_guard(), proxy=proxy)
+
+    client.get("https://api.test/odds")
+
+    assert client.request_count == 1
+    assert client.proxied_count == 1  # density ≥500 → routed through the proxy
+    proxy.close()
+
+
+def test_proxy_disabled_by_config_keeps_direct(httpx_mock: HTTPXMock) -> None:
+    # Polytricks: even at Aggressive density, proxy_enabled=False stays direct.
+    httpx_mock.add_response(status_code=200)
+    proxy = ProxyRouter(
+        proxy_url="http://proxy:8000", enabled=False, timeout_seconds=30.0
+    )
+    client, _, _ = _client(ip_guard=_aggressive_guard(), proxy=proxy)
+
+    response = client.get("https://api.test/odds")
+
+    assert response.status_code == 200
+    assert client.proxied_count == 0  # never routed through the proxy

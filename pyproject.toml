@@ -13,10 +13,12 @@ keywords = ["gcp", "data-pipeline", "ingestion", "etl", "cloud-run"]
 #   - dlt (Phase 1): the load layer behind dlt_sink (parquet → filesystem/GCS).
 #   - pydantic-settings, structlog (Phase 2): config and structured logging.
 #   - prometheus-client (Phase 3): standard metric series + end-of-run push.
+#   - redis (Phase 5): IP-guard sliding-window counters + latest-state cache.
 dependencies = [
     "dlt[filesystem,parquet]>=1,<2",
     "prometheus-client>=0.20",
     "pydantic-settings>=2,<3",
+    "redis>=5",
     "structlog>=24",
 ]
 

@@ -2,10 +2,10 @@
 
 Wraps ``httpx`` with the generic ingestion plumbing: retry with jitter on
 transient failures (network / 5xx), User-Agent rotation, per-response metrics
-(``http_status_total``, request count → ``request_rate``), and circuit-breaker
-integration. A 429 is recorded with the breaker (not retried — it's a rate
-signal); when the breaker is open, a request raises ``CircuitOpenError`` so the
-source can stop cleanly. All knobs come from ``Settings``.
+(``http_status_total``, request count → ``request_rate``), circuit-breaker
+integration, and IP-guard-driven mode switching (extra jitter in Warning, proxy
+routing in Aggressive → feeds ``proxy_usage_ratio``). A 429 is recorded with the
+breaker (not retried); an open breaker raises ``CircuitOpenError``.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ import httpx
 from structlog.typing import FilteringBoundLogger
 
 from data_pipeline_core.ingestion.circuit_breaker import CircuitBreaker
+from data_pipeline_core.ingestion.ip_guard import IpGuard, Mode
+from data_pipeline_core.ingestion.proxy import ProxyRouter
 from data_pipeline_core.obs.metrics import StandardMetrics
 
 if TYPE_CHECKING:
@@ -30,7 +32,7 @@ class CircuitOpenError(RuntimeError):
 
 
 class HttpClient:
-    """An ``httpx.Client`` with retry, UA rotation, metrics, and a breaker."""
+    """An ``httpx.Client`` with retry, UA rotation, metrics, breaker, IP guard."""
 
     def __init__(
         self,
@@ -39,6 +41,8 @@ class HttpClient:
         settings: Settings,
         breaker: CircuitBreaker,
         metrics: StandardMetrics | None = None,
+        ip_guard: IpGuard | None = None,
+        proxy: ProxyRouter | None = None,
         logger: FilteringBoundLogger | None = None,
         sleep: Callable[[float], None] = time.sleep,
         transport: httpx.BaseTransport | None = None,
@@ -47,6 +51,8 @@ class HttpClient:
         self._settings = settings
         self._breaker = breaker
         self._metrics = metrics
+        self._ip_guard = ip_guard
+        self._proxy = proxy
         self._log = logger
         self._sleep = sleep
         self._rng = random.Random()
@@ -55,11 +61,16 @@ class HttpClient:
             timeout=settings.http_timeout_seconds, transport=transport
         )
         self.request_count = 0
+        self.proxied_count = 0
 
-    def get(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self.request("GET", url, **kwargs)
+    def get(
+        self, url: str, *, force_proxy: bool = False, **kwargs: Any
+    ) -> httpx.Response:
+        return self.request("GET", url, force_proxy=force_proxy, **kwargs)
 
-    def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+    def request(
+        self, method: str, url: str, *, force_proxy: bool = False, **kwargs: Any
+    ) -> httpx.Response:
         if self._breaker.is_open:
             raise CircuitOpenError(f"circuit open for source {self._source!r}")
 
@@ -67,11 +78,24 @@ class HttpClient:
         if self._user_agents:
             headers.setdefault("User-Agent", self._rng.choice(self._user_agents))
 
+        mode = self._ip_guard.evaluate() if self._ip_guard is not None else Mode.SAFE
+        if mode in (Mode.WARNING, Mode.AGGRESSIVE):
+            self._sleep(self._rng.uniform(0, self._settings.warning_jitter_seconds))
+
+        client = self._client
+        use_proxy = False
+        if self._proxy is not None and self._proxy.should_use(mode, force=force_proxy):
+            proxied = self._proxy.client
+            if proxied is not None:
+                client, use_proxy = proxied, True
+        if use_proxy:
+            self.proxied_count += 1
+
         attempts = max(1, self._settings.http_max_retries + 1)
         transport_error: httpx.TransportError | None = None
         for attempt in range(attempts):
             try:
-                response = self._client.request(method, url, headers=headers, **kwargs)
+                response = client.request(method, url, headers=headers, **kwargs)
             except httpx.TransportError as exc:
                 transport_error = exc
                 self._backoff(attempt)

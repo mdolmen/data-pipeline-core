@@ -14,6 +14,8 @@ from prometheus_client import CollectorRegistry
 
 from data_pipeline_core.ingestion.circuit_breaker import CircuitBreaker
 from data_pipeline_core.ingestion.http import HttpClient
+from data_pipeline_core.ingestion.ip_guard import IpGuard
+from data_pipeline_core.ingestion.proxy import ProxyRouter
 from data_pipeline_core.obs.gmp_push import push_metrics
 from data_pipeline_core.obs.metrics import StandardMetrics
 from data_pipeline_core.runtime.config import Settings
@@ -21,6 +23,7 @@ from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.runtime.lifecycle import Lifecycle, handle_shutdown
 from data_pipeline_core.runtime.logging import configure_logging, get_logger
 from data_pipeline_core.storage.protocols import Sink, Source
+from data_pipeline_core.storage.redis_cache import make_redis
 
 
 class WorkerApp:
@@ -53,11 +56,30 @@ class WorkerApp:
         )
         run_id = uuid.uuid4().hex
         log = get_logger().bind(run_id=run_id, source=source_name)
+        redis_client = make_redis(settings.redis_url) if settings.redis_url else None
+        ip_guard = (
+            IpGuard(
+                source_name,
+                redis_client,
+                warning_at=settings.ip_guard_warning_at,
+                aggressive_at=settings.ip_guard_aggressive_at,
+                window_seconds=settings.ip_guard_window_seconds,
+            )
+            if redis_client is not None
+            else None
+        )
+        proxy = ProxyRouter(
+            proxy_url=settings.proxy_url,
+            enabled=settings.proxy_enabled,
+            timeout_seconds=settings.http_timeout_seconds,
+        )
         http = HttpClient(
             source_name,
             settings=settings,
             breaker=breaker,
             metrics=metrics,
+            ip_guard=ip_guard,
+            proxy=proxy,
             logger=log,
         )
         lifecycle = Lifecycle()
@@ -85,9 +107,15 @@ class WorkerApp:
                 log.info("worker finished", row_count=result.row_count)
             finally:
                 elapsed = time.monotonic() - started
-                rate = http.request_count / elapsed if elapsed > 0 else 0.0
+                requests = http.request_count
+                rate = requests / elapsed if elapsed > 0 else 0.0
                 metrics.request_rate.labels(source=source_name).set(rate)
+                ratio = http.proxied_count / requests if requests > 0 else 0.0
+                metrics.proxy_usage_ratio.labels(source=source_name).set(ratio)
                 http.close()
+                proxy.close()
+                if redis_client is not None:
+                    redis_client.close()
                 push_metrics(
                     registry,
                     gateway_url=settings.metrics_push_gateway,
