@@ -69,10 +69,11 @@ through the SDK. No resilience, minimal obs — just the spine.
 
 ## Phase 2 — Config & structured logging
 
-- [ ] `runtime/config.py` — `Settings` via `pydantic-settings` (env + GCP secrets)
-- [ ] Structured logging (`structlog`): JSON output, run_id/source context bound
-- [ ] `runtime/lifecycle.py` — SIGTERM handling, graceful shutdown (Cloud Run Jobs)
-- [ ] **Betting:** move the worker's config to `Settings`; logs are structured JSON
+- [x] `runtime/config.py` — `Settings` via `pydantic-settings` (env + GCP secrets)
+      _(env/.env now; GCP Secret Manager deferred to a later phase)_
+- [x] Structured logging (`structlog`): JSON output, run_id/source context bound
+- [x] `runtime/lifecycle.py` — SIGTERM handling, graceful shutdown (Cloud Run Jobs)
+- [x] **Betting:** move the worker's config to `Settings`; logs are structured JSON
 
 ## Phase 3 — Observability
 
