@@ -10,6 +10,15 @@ is cut.
 
 ### Added
 
+- **Phase 5 — IP guard & proxy.** `ingestion/ip_guard.py` — a per-source Redis
+  sliding-window counter classifying request density into Safe / Warning /
+  Aggressive (thresholds config defaults <300 / 300-500 / >=500 req/hr).
+  `ingestion/proxy.py` — `ProxyRouter` routes via the SaaS proxy in Aggressive
+  mode or on a forced trigger, disabled by config (Polytricks). `HttpClient`
+  consults the guard per request (extra jitter in Warning, proxy in Aggressive →
+  `proxy_usage_ratio`). `storage/redis_cache.py` — `make_redis` + latest-state
+  `RedisCache`. New `Settings`: `redis_url`, `proxy_url`, `proxy_enabled`, guard
+  thresholds/window, `warning_jitter_seconds`. `redis` is now a runtime dep.
 - **Phase 4 — resilience.** `ingestion/http.py` — an instrumented httpx client
   (retry with full-jitter backoff on network/5xx, User-Agent rotation, per-status
   metrics, request counting → `request_rate`) exposed to the source as
@@ -65,6 +74,10 @@ Polytricks instance — see `TODO.md`.
 | 429 handling | Recorded with breaker, not retried | Retrying a rate-limit signal worsens it; the breaker is the correct response. |
 | `CircuitOpenError` on open breaker | SDK raises; source decides | The project's `fetch()` owns the loop, so it chooses to stop/partial-yield — the SDK doesn't impose a policy. |
 | Breaker cross-run persistence | Deferred to Phase 5 (Redis) | In-memory per run is enough to validate the mechanism; surviving restarts needs the Redis store. |
+| IP guard + proxy router | SDK, config-gated | Generic density→mode→proxy mechanism; thresholds are config defaults (betting-tuned). Disabled when `redis_url`/`proxy` unset → Polytricks keeps retry/jitter only. |
+| Volatility trigger | SDK exposes a `force_proxy` hook; detection stays in betting | Forcing the proxy is generic; computing volatility (L2-norm of probability movement) is business logic. |
+| `RedisCache` latest-state | SDK, provided not yet consumed | Generic snapshot store; betting wires it for latest odds in a later phase (recorded so it isn't re-invented). |
+| Sliding window = fixed hourly buckets | SDK | Matches ARCHITECTURE §6.A key structure (`ratelimit:{source}:{bucket}`, 2× TTL); simpler than a sorted-set true window and sufficient for req/hr thresholds. |
 | `dlt` (load layer) | SDK, runtime dep | Generic schema-inference + parquet load behind `dlt_sink`; the canonical/business schema stays in the project. |
 | Destination (`file://` vs `gs://`) | SDK, config-driven | One `dlt_sink`; local vs GCS is dlt config (`DESTINATION__FILESYSTEM__BUCKET_URL`), not a code fork. |
 | `WorkerApp(source, sink)` signature | SDK, minimal | `transform=` / `settings=` are deferred to their phases (6 / 2) as non-breaking optional params, not added speculatively. |

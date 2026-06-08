@@ -101,15 +101,16 @@ through the SDK. No resilience, minimal obs — just the spine.
 
 ## Phase 5 — IP guard & proxy (generic mechanism, betting-tuned defaults)
 
-- [ ] `ingestion/ip_guard.py` — Redis sliding-window counter, mode switch
+- [x] `ingestion/ip_guard.py` — Redis sliding-window counter, mode switch
       Safe/Warning/Aggressive; **thresholds are config** (defaults: <300 / 300–500
       / ≥500 req/hr per ARCHITECTURE §6)
-- [ ] `ingestion/proxy.py` — proxy SaaS middleware, activated by ip_guard or
-      volatility trigger
-- [ ] `storage/redis_cache.py` — latest-state cache + counter backing
-- [ ] **Betting:** simulate >500 req/hr → traffic routes through proxy,
+- [x] `ingestion/proxy.py` — proxy SaaS middleware, activated by ip_guard or
+      volatility trigger _(via a forced-routing hook; volatility detection stays
+      in the project)_
+- [x] `storage/redis_cache.py` — latest-state cache + counter backing
+- [x] **Betting:** simulate >500 req/hr → traffic routes through proxy,
       `proxy_usage_ratio` rises; **Polytricks check:** can disable proxy, keep
-      retry/jitter only
+      retry/jitter only _(proxy disabled by config → stays direct; SDK-tested)_
 
 ## Phase 6 — Transform & staging decoupling
 
