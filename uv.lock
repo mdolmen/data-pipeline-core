@@ -405,6 +405,7 @@ version = "0.1.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "dlt", extra = ["filesystem", "parquet"] },
+    { name = "prometheus-client" },
     { name = "pydantic-settings" },
     { name = "structlog" },
 ]
@@ -414,7 +415,6 @@ dev = [
     { name = "fakeredis" },
     { name = "mypy" },
     { name = "pre-commit" },
-    { name = "prometheus-client" },
     { name = "pytest" },
     { name = "pytest-httpx" },
     { name = "ruff" },
@@ -423,6 +423,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dlt", extras = ["filesystem", "parquet"], specifier = ">=1,<2" },
+    { name = "prometheus-client", specifier = ">=0.20" },
     { name = "pydantic-settings", specifier = ">=2,<3" },
     { name = "structlog", specifier = ">=24" },
 ]
@@ -432,7 +433,6 @@ dev = [
     { name = "fakeredis", specifier = ">=2.23" },
     { name = "mypy", specifier = ">=1.11" },
     { name = "pre-commit", specifier = ">=3.7" },
-    { name = "prometheus-client", specifier = ">=0.20" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-httpx", specifier = ">=0.30" },
     { name = "ruff", specifier = ">=0.6" },

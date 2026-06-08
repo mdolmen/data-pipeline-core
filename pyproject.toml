@@ -12,8 +12,10 @@ keywords = ["gcp", "data-pipeline", "ingestion", "etl", "cloud-run"]
 # weight. See TODO.md / CHANGELOG.md decision log.
 #   - dlt (Phase 1): the load layer behind dlt_sink (parquet → filesystem/GCS).
 #   - pydantic-settings, structlog (Phase 2): config and structured logging.
+#   - prometheus-client (Phase 3): standard metric series + end-of-run push.
 dependencies = [
     "dlt[filesystem,parquet]>=1,<2",
+    "prometheus-client>=0.20",
     "pydantic-settings>=2,<3",
     "structlog>=24",
 ]
@@ -32,7 +34,6 @@ dev = [
     "pytest>=8",
     "pytest-httpx>=0.30",
     "fakeredis>=2.23",
-    "prometheus-client>=0.20",
     "pre-commit>=3.7",
 ]
 

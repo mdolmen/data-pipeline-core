@@ -19,3 +19,7 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"
+
+    # End-of-run metrics push. None → push is skipped (logged). A real
+    # deployment sets a PushGateway URL; GMP remote-write/OTLP is a later swap.
+    metrics_push_gateway: str | None = None
