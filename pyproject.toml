@@ -7,10 +7,13 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Mathieu Dolmen", email = "mathieu.dolmen@gmail.com" }]
 keywords = ["gcp", "data-pipeline", "ingestion", "etl", "cloud-run"]
-# Runtime dependencies are intentionally empty at Phase 0. They are added per
-# build phase as a real consumer (proba-markets-analysis) demands them, so the
-# SDK never carries speculative weight. See TODO.md for the phased plan.
-dependencies = []
+# Runtime dependencies are added per build phase as a real consumer
+# (proba-markets-analysis) demands them, so the SDK never carries speculative
+# weight. See TODO.md / CHANGELOG.md decision log.
+#   - dlt (Phase 1): the load layer behind dlt_sink (parquet → filesystem/GCS).
+dependencies = [
+    "dlt[filesystem,parquet]>=1,<2",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -44,8 +47,14 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-# fakeredis ships without complete type information.
-module = ["fakeredis.*"]
+# Third-party libraries that ship without complete type information.
+module = ["fakeredis.*", "dlt.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# pyarrow ships partial types; skip following it so its calls are untyped-safe.
+module = ["pyarrow.*"]
+follow_imports = "skip"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
