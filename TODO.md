@@ -41,13 +41,13 @@ are green.
 
 ## Phase 0 — Repo & tooling setup
 
-- [ ] `pyproject.toml` (uv + hatch build backend), `src/data_pipeline_core/` layout
-- [ ] Dev tooling: `ruff`, `mypy --strict`, `pytest`, `pre-commit`
-- [ ] CI skeleton (GitHub Actions): lint + type + test on push
-- [ ] `README.md`, `CHANGELOG.md` (start at `0.1.0-dev`), `.gitignore`
-- [ ] Test scaffolding: `conftest.py` with `fakeredis`, httpx mock, isolated
+- [x] `pyproject.toml` (uv + hatch build backend), `src/data_pipeline_core/` layout
+- [x] Dev tooling: `ruff`, `mypy --strict`, `pytest`, `pre-commit`
+- [x] CI skeleton (GitHub Actions): lint + type + test on push
+- [x] `README.md`, `CHANGELOG.md` (start at `0.1.0-dev`), `.gitignore`
+- [x] Test scaffolding: `conftest.py` with `fakeredis`, httpx mock, isolated
       Prometheus registry
-- [ ] **Betting:** init `proba-markets-analysis` Python env, wire editable path
+- [x] **Betting:** init `proba-markets-analysis` Python env, wire editable path
       dependency above, confirm `import data_pipeline_core` works
 
 ## Phase 1 — Walking skeleton (the tracer bullet)
