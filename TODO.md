@@ -55,15 +55,17 @@ are green.
 Goal: one betting worker fetches odds and writes Parquet to GCS, end-to-end,
 through the SDK. No resilience, minimal obs — just the spine.
 
-- [ ] `storage/protocols.py` — `Source`, `Sink`, `Record`, `WriteResult` Protocols
-- [ ] `runtime/context.py` — minimal `RunContext` (run_id, logger, clock)
-- [ ] `runtime/app.py` — minimal `WorkerApp(source, sink).run()`: call
+- [x] `storage/protocols.py` — `Source`, `Sink`, `Record`, `WriteResult` Protocols
+- [x] `runtime/context.py` — minimal `RunContext` (run_id, logger, clock)
+- [x] `runtime/app.py` — minimal `WorkerApp(source, sink).run()`: call
       `source.fetch(ctx)`, stream to `sink.write()`, return exit code
-- [ ] `storage/dlt_sink.py` — `dlt_sink(dataset, destination)` for filesystem/GCS
+- [x] `storage/dlt_sink.py` — `dlt_sink(dataset, destination)` for filesystem/GCS
       parquet (lean on dlt for schema inference + load)
-- [ ] **Betting:** implement one real `Source` (one bookmaker, one market),
+- [x] **Betting:** implement one real `Source` (one bookmaker, one market),
       `workers/main.py` = `WorkerApp(source, sink).run()`, observe Parquet land in
       GCS. **This is the milestone that validates the core contract.**
+      _Verified locally against a `file://` bucket; `gs://` is the same code by
+      config (`DESTINATION__FILESYSTEM__BUCKET_URL`)._
 
 ## Phase 2 — Config & structured logging
 
