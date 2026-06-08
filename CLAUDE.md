@@ -79,7 +79,8 @@ exists.
 ## Git
 
 - Commit often. Each commit is self-contained: it builds, it makes sense on its own, and it does one thing. A feature spanning backend + frontend can still be one commit if the pieces only make sense together — but unrelated cleanups go in their own commit.
-- Commit messages in English.
-- **Subject**: single line, imperative mood, no trailing period. Keep it tight.
+- Commit messages in English, following [Conventional Commits](https://www.conventionalcommits.org/) — `<type>(optional scope): description`.
+- **Type**: one of `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`, `chore`, `perf`. An optional scope names the area (e.g. `feat(ingestion):`). A breaking change adds `!` before the colon (`feat!:`) — any change to the public contract (`Source`, `Sink`, `WorkerApp`, `RunContext`) is breaking and is a SemVer-major event.
+- **Subject**: single line, imperative mood, lower-case after the colon, no trailing period. Keep it tight.
 - **Body** (only when needed): blank line after subject, then a short paragraph explaining the *why*. If there are multiple distinct points, use one bullet (`- `) per point instead of prose.
 - No `Co-Authored-By` trailers unless explicitly requested.
