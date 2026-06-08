@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from data_pipeline_core.ingestion.http import CircuitOpenError
 from data_pipeline_core.runtime.app import WorkerApp
 from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
@@ -20,6 +21,7 @@ except PackageNotFoundError:  # pragma: no cover - source tree without install
     __version__ = "0.0.0"
 
 __all__ = [
+    "CircuitOpenError",
     "Record",
     "RunContext",
     "Settings",

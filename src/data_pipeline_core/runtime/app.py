@@ -1,20 +1,25 @@
 """``WorkerApp`` — the run loop that wraps a project's business code.
 
-Builds config + structured logging, installs graceful-shutdown handling, runs
-the source→sink pass, and pushes the standard metrics at exit. Resilience is
-wired into this same loop by later phases.
+Builds config + structured logging, the resilience stack (instrumented HTTP
+client + circuit breaker) handed to the source via ``ctx.http``, graceful
+shutdown, and the standard metrics pushed at exit.
 """
 
 from __future__ import annotations
 
+import time
+import uuid
+
 from prometheus_client import CollectorRegistry
 
+from data_pipeline_core.ingestion.circuit_breaker import CircuitBreaker
+from data_pipeline_core.ingestion.http import HttpClient
 from data_pipeline_core.obs.gmp_push import push_metrics
 from data_pipeline_core.obs.metrics import StandardMetrics
 from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.runtime.lifecycle import Lifecycle, handle_shutdown
-from data_pipeline_core.runtime.logging import configure_logging
+from data_pipeline_core.runtime.logging import configure_logging, get_logger
 from data_pipeline_core.storage.protocols import Sink, Source
 
 
@@ -40,13 +45,31 @@ class WorkerApp:
 
         registry = CollectorRegistry()
         metrics = StandardMetrics(registry, source=source_name)
+        breaker = CircuitBreaker(
+            source_name,
+            threshold=settings.circuit_breaker_threshold,
+            cooldown_seconds=settings.circuit_breaker_cooldown_seconds,
+            metrics=metrics,
+        )
+        run_id = uuid.uuid4().hex
+        log = get_logger().bind(run_id=run_id, source=source_name)
+        http = HttpClient(
+            source_name,
+            settings=settings,
+            breaker=breaker,
+            metrics=metrics,
+            logger=log,
+        )
         lifecycle = Lifecycle()
         ctx = RunContext.create(
             source_name=source_name,
+            http=http,
+            run_id=run_id,
+            logger=log,
             should_stop=lambda: lifecycle.should_stop,
         )
-        log = ctx.logger
 
+        started = time.monotonic()
         with handle_shutdown(lifecycle, log):
             log.info("worker starting")
             exit_code = 0
@@ -61,6 +84,10 @@ class WorkerApp:
                 metrics.ingestion_lag_seconds.labels(source=source_name).set(0)
                 log.info("worker finished", row_count=result.row_count)
             finally:
+                elapsed = time.monotonic() - started
+                rate = http.request_count / elapsed if elapsed > 0 else 0.0
+                metrics.request_rate.labels(source=source_name).set(rate)
+                http.close()
                 push_metrics(
                     registry,
                     gateway_url=settings.metrics_push_gateway,
