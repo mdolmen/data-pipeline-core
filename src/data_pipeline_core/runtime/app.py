@@ -2,13 +2,16 @@
 
 Builds config + structured logging, the resilience stack (instrumented HTTP
 client + circuit breaker) handed to the source via ``ctx.http``, graceful
-shutdown, and the standard metrics pushed at exit.
+shutdown, and the standard metrics pushed at exit. An optional ``transform`` is
+applied in-process between ``fetch`` and ``write``; the same loop also runs a
+dedicated transform worker (raw-landing source → transform → curated sink).
 """
 
 from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Iterable, Iterator
 
 from prometheus_client import CollectorRegistry
 
@@ -22,32 +25,34 @@ from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.runtime.lifecycle import Lifecycle, handle_shutdown
 from data_pipeline_core.runtime.logging import configure_logging, get_logger
-from data_pipeline_core.storage.protocols import Sink, Source
+from data_pipeline_core.storage.protocols import Record, Sink, Source, Transform
 from data_pipeline_core.storage.redis_cache import make_redis
 
 
 class WorkerApp:
-    """Wraps a ``Source`` and a ``Sink`` into a single runnable worker."""
+    """Wraps a ``Source``, optional ``Transform`` and ``Sink`` into a worker."""
 
     def __init__(
         self,
         source: Source,
         sink: Sink,
         *,
+        transform: Transform | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._source = source
         self._sink = sink
+        self._transform = transform
         self._settings = settings or Settings()
 
     def run(self) -> int:
-        """Run one ingestion pass. Returns a process exit code (0 ok, 1 failed)."""
+        """Run one pass. Returns a process exit code (0 ok, 1 failed)."""
         settings = self._settings
         source_name = self._source.name
         configure_logging(level=settings.log_level, fmt=settings.log_format)
 
         registry = CollectorRegistry()
-        metrics = StandardMetrics(registry, source=source_name)
+        metrics = StandardMetrics(registry, source=source_name, stage=settings.stage)
         breaker = CircuitBreaker(
             source_name,
             threshold=settings.circuit_breaker_threshold,
@@ -55,7 +60,7 @@ class WorkerApp:
             metrics=metrics,
         )
         run_id = uuid.uuid4().hex
-        log = get_logger().bind(run_id=run_id, source=source_name)
+        log = get_logger().bind(run_id=run_id, source=source_name, stage=settings.stage)
         redis_client = make_redis(settings.redis_url) if settings.redis_url else None
         ip_guard = (
             IpGuard(
@@ -96,22 +101,25 @@ class WorkerApp:
             log.info("worker starting")
             exit_code = 0
             try:
-                result = self._sink.write(self._source.fetch(ctx))
+                records = self._source.fetch(ctx)
+                if self._transform is not None:
+                    records = self._apply_transform(records, ctx)
+                result = self._sink.write(records)
             except Exception:
                 log.exception("worker failed")
-                metrics.worker_up.labels(source=source_name).set(0)
+                metrics.set_worker_up(False)
                 exit_code = 1
             else:
-                metrics.worker_up.labels(source=source_name).set(1)
-                metrics.ingestion_lag_seconds.labels(source=source_name).set(0)
+                metrics.set_worker_up(True)
+                metrics.set_ingestion_lag(0)
                 log.info("worker finished", row_count=result.row_count)
             finally:
                 elapsed = time.monotonic() - started
                 requests = http.request_count
-                rate = requests / elapsed if elapsed > 0 else 0.0
-                metrics.request_rate.labels(source=source_name).set(rate)
-                ratio = http.proxied_count / requests if requests > 0 else 0.0
-                metrics.proxy_usage_ratio.labels(source=source_name).set(ratio)
+                metrics.set_request_rate(requests / elapsed if elapsed > 0 else 0.0)
+                metrics.set_proxy_usage_ratio(
+                    http.proxied_count / requests if requests > 0 else 0.0
+                )
                 http.close()
                 proxy.close()
                 if redis_client is not None:
@@ -123,3 +131,10 @@ class WorkerApp:
                     logger=log,
                 )
             return exit_code
+
+    def _apply_transform(
+        self, records: Iterable[Record], ctx: RunContext
+    ) -> Iterator[Record]:
+        assert self._transform is not None
+        for record in records:
+            yield from self._transform.transform(record, ctx)

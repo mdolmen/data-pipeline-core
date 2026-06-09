@@ -35,6 +35,18 @@ class Source(Protocol):
 
 
 @runtime_checkable
+class Transform(Protocol):
+    """Optional, per project: parsing / normalization of raw records.
+
+    One record in, zero or more out (normalize, explode, drop). Wired into a
+    worker either in-process (between fetch and write) or as its own transform
+    worker reading from the raw-landing staging boundary.
+    """
+
+    def transform(self, record: Record, ctx: RunContext) -> Iterable[Record]: ...
+
+
+@runtime_checkable
 class Sink(Protocol):
     """Receives the records a run produced and persists them."""
 

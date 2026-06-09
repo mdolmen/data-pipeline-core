@@ -35,7 +35,6 @@ class CircuitBreaker:
         self._clock = clock
         self._failures = 0
         self._opened_at: float | None = None
-        self._publish(0)
 
     @property
     def is_open(self) -> bool:
@@ -56,13 +55,13 @@ class CircuitBreaker:
         self._failures += 1
         if self._opened_at is None and self._failures >= self._threshold:
             self._opened_at = self._clock()
-            self._publish(1)
+            self._publish(is_open=True)
 
     def _reset(self) -> None:
         self._failures = 0
         self._opened_at = None
-        self._publish(0)
+        self._publish(is_open=False)
 
-    def _publish(self, state: int) -> None:
+    def _publish(self, *, is_open: bool) -> None:
         if self._metrics is not None:
-            self._metrics.circuit_breaker_state.labels(source=self._source).set(state)
+            self._metrics.set_circuit_breaker_open(is_open)

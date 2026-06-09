@@ -55,7 +55,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # Third-party libraries that ship without complete type information.
-module = ["fakeredis.*", "dlt.*"]
+module = ["fakeredis.*", "dlt.*", "fsspec.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

@@ -23,7 +23,7 @@ def _client(
     **overrides: object,
 ) -> tuple[HttpClient, CircuitBreaker, CollectorRegistry]:
     registry = CollectorRegistry()
-    metrics = StandardMetrics(registry, source="s")
+    metrics = StandardMetrics(registry, source="s", stage="ingest")
     settings = Settings(**overrides)  # type: ignore[arg-type]
     breaker = CircuitBreaker("s", threshold=2, cooldown_seconds=900.0, metrics=metrics)
     client = HttpClient(
@@ -60,14 +60,9 @@ def test_retries_5xx_then_succeeds(httpx_mock: HTTPXMock) -> None:
 
     assert response.status_code == 200
     assert client.request_count == 2
-    assert (
-        registry.get_sample_value("http_status_total", {"source": "s", "code": "503"})
-        == 1
-    )
-    assert (
-        registry.get_sample_value("http_status_total", {"source": "s", "code": "200"})
-        == 1
-    )
+    base = {"source": "s", "stage": "ingest"}
+    assert registry.get_sample_value("http_status_total", {**base, "code": "503"}) == 1
+    assert registry.get_sample_value("http_status_total", {**base, "code": "200"}) == 1
 
 
 def test_rotates_user_agent_from_settings(httpx_mock: HTTPXMock) -> None:
@@ -89,7 +84,9 @@ def test_429_records_failure_and_returns(httpx_mock: HTTPXMock) -> None:
     assert response.status_code == 429
     assert client.request_count == 1  # not retried
     assert (
-        registry.get_sample_value("http_status_total", {"source": "s", "code": "429"})
+        registry.get_sample_value(
+            "http_status_total", {"source": "s", "stage": "ingest", "code": "429"}
+        )
         == 1
     )
 
@@ -104,7 +101,12 @@ def test_open_breaker_blocks_request(httpx_mock: HTTPXMock) -> None:
 
     with pytest.raises(CircuitOpenError):
         client.get("https://api.test/odds")
-    assert registry.get_sample_value("circuit_breaker_state", {"source": "s"}) == 1
+    assert (
+        registry.get_sample_value(
+            "circuit_breaker_state", {"source": "s", "stage": "ingest"}
+        )
+        == 1
+    )
 
 
 def test_retries_transport_error_then_raises(httpx_mock: HTTPXMock) -> None:

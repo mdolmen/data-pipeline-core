@@ -1,11 +1,13 @@
 """The standard operational series — the stable observability surface.
 
 Fixed names + labels so Grafana dashboards are shared across every consumer:
-**do not rename or relabel** (see ARCHITECTURE.md §8). Several series are
-populated by mechanisms that arrive in later phases (the HTTP client →
-``request_rate`` / ``http_status_total`` in Phase 4, the circuit breaker →
-``circuit_breaker_state`` in Phase 4, the proxy → ``proxy_usage_ratio`` in
-Phase 5); they are declared here now and read 0 until then.
+**do not rename or relabel** (see ARCHITECTURE.md §8). Every series carries
+``source`` and ``stage`` (ingest vs transform worker). The ``(source, stage)``
+label set is owned here and applied through the semantic methods below, so
+callers (breaker, HTTP client, run loop) never handle labels directly.
+
+Some series are populated by mechanisms in earlier phases (HTTP client, breaker,
+proxy); any not yet driven read 0.
 """
 
 from __future__ import annotations
@@ -14,56 +16,75 @@ from prometheus_client import CollectorRegistry, Counter, Gauge
 
 
 class StandardMetrics:
-    """Holds the standard series, all bound to one run's registry."""
+    """Holds the standard series, bound to one run's registry, source and stage."""
 
-    def __init__(self, registry: CollectorRegistry, *, source: str) -> None:
-        self.source = source
+    def __init__(self, registry: CollectorRegistry, *, source: str, stage: str) -> None:
+        self._base = {"source": source, "stage": stage}
+        labels = ["source", "stage"]
 
-        self.worker_up = Gauge(
+        self._worker_up = Gauge(
             "worker_up",
             "Worker liveness: 1 if the run completed successfully, else 0.",
-            ["source"],
+            labels,
             registry=registry,
         )
-        self.request_rate = Gauge(
+        self._request_rate = Gauge(
             "request_rate",
             "Outbound HTTP request rate (requests/second) over the run.",
-            ["source"],
+            labels,
             registry=registry,
         )
         # Counter base name "http_status" → exposed series "http_status_total".
-        self.http_status_total = Counter(
+        self._http_status = Counter(
             "http_status",
             "Outbound HTTP responses by status code.",
-            ["source", "code"],
+            [*labels, "code"],
             registry=registry,
         )
-        self.ingestion_lag_seconds = Gauge(
+        self._ingestion_lag = Gauge(
             "ingestion_lag_seconds",
             "Seconds since the last successful tick for this source.",
-            ["source"],
+            labels,
             registry=registry,
         )
-        self.circuit_breaker_state = Gauge(
+        self._circuit_breaker = Gauge(
             "circuit_breaker_state",
             "Per-source circuit breaker: 0 closed, 1 open.",
-            ["source"],
+            labels,
             registry=registry,
         )
-        self.proxy_usage_ratio = Gauge(
+        self._proxy_ratio = Gauge(
             "proxy_usage_ratio",
             "Share of requests routed via the proxy (0..1).",
-            ["source"],
+            labels,
             registry=registry,
         )
 
         # Initialise the gauges so the series export at 0 before their mechanism
-        # populates them (counters appear once a labelled value is first seen).
+        # populates them (the counter appears once a status is first seen).
         for gauge in (
-            self.worker_up,
-            self.request_rate,
-            self.ingestion_lag_seconds,
-            self.circuit_breaker_state,
-            self.proxy_usage_ratio,
+            self._worker_up,
+            self._request_rate,
+            self._ingestion_lag,
+            self._circuit_breaker,
+            self._proxy_ratio,
         ):
-            gauge.labels(source=source).set(0)
+            gauge.labels(**self._base).set(0)
+
+    def set_worker_up(self, up: bool) -> None:
+        self._worker_up.labels(**self._base).set(1 if up else 0)
+
+    def set_ingestion_lag(self, seconds: float) -> None:
+        self._ingestion_lag.labels(**self._base).set(seconds)
+
+    def set_request_rate(self, rate: float) -> None:
+        self._request_rate.labels(**self._base).set(rate)
+
+    def set_proxy_usage_ratio(self, ratio: float) -> None:
+        self._proxy_ratio.labels(**self._base).set(ratio)
+
+    def set_circuit_breaker_open(self, is_open: bool) -> None:
+        self._circuit_breaker.labels(**self._base).set(1 if is_open else 0)
+
+    def observe_http_status(self, code: int) -> None:
+        self._http_status.labels(**self._base, code=str(code)).inc()

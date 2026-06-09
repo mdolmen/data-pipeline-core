@@ -13,7 +13,14 @@ from data_pipeline_core.runtime.app import WorkerApp
 from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.storage.dlt_sink import dlt_sink
-from data_pipeline_core.storage.protocols import Record, Sink, Source, WriteResult
+from data_pipeline_core.storage.protocols import (
+    Record,
+    Sink,
+    Source,
+    Transform,
+    WriteResult,
+)
+from data_pipeline_core.storage.staging import raw_landing_sink, raw_landing_source
 
 try:
     __version__ = version("data-pipeline-core")
@@ -27,8 +34,11 @@ __all__ = [
     "Settings",
     "Sink",
     "Source",
+    "Transform",
     "WorkerApp",
     "WriteResult",
     "__version__",
     "dlt_sink",
+    "raw_landing_sink",
+    "raw_landing_source",
 ]

@@ -127,6 +127,4 @@ class HttpClient:
 
     def _record_status(self, code: int) -> None:
         if self._metrics is not None:
-            self._metrics.http_status_total.labels(
-                source=self._source, code=str(code)
-            ).inc()
+            self._metrics.observe_http_status(code)

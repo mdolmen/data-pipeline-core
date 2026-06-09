@@ -12,7 +12,7 @@ def _make(
     clock: list[float], *, threshold: int = 3, cooldown_seconds: float = 900.0
 ) -> tuple[CircuitBreaker, CollectorRegistry]:
     registry = CollectorRegistry()
-    metrics = StandardMetrics(registry, source="s")
+    metrics = StandardMetrics(registry, source="s", stage="ingest")
     breaker = CircuitBreaker(
         "s",
         threshold=threshold,
@@ -24,7 +24,9 @@ def _make(
 
 
 def _state(registry: CollectorRegistry) -> float | None:
-    return registry.get_sample_value("circuit_breaker_state", {"source": "s"})
+    return registry.get_sample_value(
+        "circuit_breaker_state", {"source": "s", "stage": "ingest"}
+    )
 
 
 def test_opens_after_threshold_failures() -> None:

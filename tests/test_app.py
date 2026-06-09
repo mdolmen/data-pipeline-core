@@ -51,6 +51,25 @@ def test_run_streams_fetch_into_write() -> None:
     assert seen_run_id and seen_run_id[0]
 
 
+def test_run_applies_transform_in_process() -> None:
+    class _Source:
+        name = "demo"
+
+        def fetch(self, ctx: RunContext) -> Iterable[Record]:
+            yield {"n": 1}
+            yield {"n": 2}
+
+    class _Double:
+        def transform(self, record: Record, ctx: RunContext) -> Iterable[Record]:
+            yield {"n": record["n"] * 2}
+
+    sink = _ListSink()
+    exit_code = WorkerApp(_Source(), sink, transform=_Double()).run()
+
+    assert exit_code == 0
+    assert sink.written == [{"n": 2}, {"n": 4}]
+
+
 def test_run_returns_1_when_source_raises() -> None:
     class _BoomSource:
         name = "boom"
@@ -74,7 +93,10 @@ def test_run_sets_worker_up_on_success(
 
     assert WorkerApp(_Source(), _ListSink()).run() == 0
     registry = captured_registry["registry"]
-    assert registry.get_sample_value("worker_up", {"source": "demo"}) == 1
+    assert (
+        registry.get_sample_value("worker_up", {"source": "demo", "stage": "ingest"})
+        == 1
+    )
 
 
 def test_run_sets_worker_up_zero_on_failure(
@@ -88,4 +110,7 @@ def test_run_sets_worker_up_zero_on_failure(
 
     assert WorkerApp(_BoomSource(), _ListSink()).run() == 1
     registry = captured_registry["registry"]
-    assert registry.get_sample_value("worker_up", {"source": "boom"}) == 0
+    assert (
+        registry.get_sample_value("worker_up", {"source": "boom", "stage": "ingest"})
+        == 0
+    )

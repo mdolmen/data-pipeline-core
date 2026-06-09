@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"
 
+    # Worker role in the topology, used as the `stage` metric label so ingest
+    # and transform workers are distinguishable on shared dashboards.
+    stage: str = "ingest"
+
+    # Raw-landing staging boundary (ingest writes here, transform reads here).
+    raw_bucket_url: str | None = None
+
     # End-of-run metrics push. None → push is skipped (logged). A real
     # deployment sets a PushGateway URL; GMP remote-write/OTLP is a later swap.
     metrics_push_gateway: str | None = None
