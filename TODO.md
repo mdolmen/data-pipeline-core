@@ -118,21 +118,22 @@ Goal: support the two-archetype topology (ingest workers land raw → transform
 workers parse/normalize) without forcing it — simple pipelines still transform
 in-process in a single worker.
 
-- [ ] `storage/protocols.py` — add the `Transform` protocol
+- [x] `storage/protocols.py` — add the `Transform` protocol
       (`transform(record, ctx) -> Iterable[Record]`)
-- [ ] `runtime/app.py` — add optional `transform=` slot; `run()` applies it
+- [x] `runtime/app.py` — add optional `transform=` slot; `run()` applies it
       between `fetch()` and `write()` (the in-process transform path)
-- [ ] `storage/staging.py` — raw-landing `Sink` + matching `Source` over the
-      staging boundary (GCS raw bucket and/or Pub/Sub)
-- [ ] `obs/metrics.py` — standard series carry a `stage` label so ingest vs
+- [x] `storage/staging.py` — raw-landing `Sink` + matching `Source` over the
+      staging boundary (GCS raw bucket via fsspec; Pub/Sub variant deferred)
+- [x] `obs/metrics.py` — standard series carry a `stage` label so ingest vs
       transform workers are distinguishable on the shared dashboards
-- [ ] **Betting (in-process):** add the normalization `Transform` (margin
+- [x] **Betting (in-process):** add the normalization `Transform` (margin
       removal) to the worker; raw → curated in a single run
-- [ ] **Betting (decoupled):** split into an ingest worker
+- [x] **Betting (decoupled):** split into an ingest worker
       (`Source` → `raw_landing_sink`) and a transform worker
       (`raw_landing_source` → `Transform` → curated `dlt_sink`); confirm raw is
-      replayable (re-run transform without re-fetching)
-- [ ] **Polytricks check:** a single worker wired `source + transform + sink`
+      replayable (re-run transform without re-fetching) _(verified via CLI: raw
+      JSONL lands, transform replays it twice)_
+- [x] **Polytricks check:** a single worker wired `source + transform + sink`
       works unchanged — confirms the split is wiring, not a fork
 
 ## Phase 7 — Storage maturity

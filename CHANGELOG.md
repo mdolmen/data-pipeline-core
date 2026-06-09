@@ -10,6 +10,15 @@ is cut.
 
 ### Added
 
+- **Phase 6 — transform & staging.** `Transform` protocol
+  (`transform(record, ctx) -> Iterable[Record]`) and an optional `transform=`
+  slot on `WorkerApp`, applied in-process (streamed) between fetch and write.
+  `storage/staging.py` — `raw_landing_sink` / `raw_landing_source` over fsspec
+  (`file://` dev, `gs://` cloud): immutable, replayable JSONL handoff between an
+  ingest worker and a transform worker. Every metric series now carries a
+  `stage` label (ingest vs transform); the `(source, stage)` label set is owned
+  by `StandardMetrics` and applied through semantic methods (the breaker and
+  HTTP client no longer touch labels). New `Settings`: `stage`, `raw_bucket_url`.
 - **Phase 5 — IP guard & proxy.** `ingestion/ip_guard.py` — a per-source Redis
   sliding-window counter classifying request density into Safe / Warning /
   Aggressive (thresholds config defaults <300 / 300-500 / >=500 req/hr).
@@ -78,6 +87,10 @@ Polytricks instance — see `TODO.md`.
 | Volatility trigger | SDK exposes a `force_proxy` hook; detection stays in betting | Forcing the proxy is generic; computing volatility (L2-norm of probability movement) is business logic. |
 | `RedisCache` latest-state | SDK, provided not yet consumed | Generic snapshot store; betting wires it for latest odds in a later phase (recorded so it isn't re-invented). |
 | Sliding window = fixed hourly buckets | SDK | Matches ARCHITECTURE §6.A key structure (`ratelimit:{source}:{bucket}`, 2× TTL); simpler than a sorted-set true window and sufficient for req/hr thresholds. |
+| `Transform` slot + staging boundary | SDK | Generic two-archetype topology; the `transform()` logic (margin removal) stays in betting. The split is wiring, not a fork — a single `source+transform+sink` worker is unchanged. |
+| Margin removal / odds normalization | Stays in betting | Pure business logic over the generic `Transform` slot. |
+| Raw-landing transport | fsspec (`file://`/`gs://`); Pub/Sub deferred | GCS-raw covers replayable handoff and is verifiable locally; Pub/Sub needs GCP. |
+| `stage` label across all series | SDK, frozen surface (added pre-deploy) | Distinguishes ingest vs transform on shared dashboards; added now while no dashboards are deployed, so not a breaking relabel. |
 | `dlt` (load layer) | SDK, runtime dep | Generic schema-inference + parquet load behind `dlt_sink`; the canonical/business schema stays in the project. |
 | Destination (`file://` vs `gs://`) | SDK, config-driven | One `dlt_sink`; local vs GCS is dlt config (`DESTINATION__FILESYSTEM__BUCKET_URL`), not a code fork. |
 | `WorkerApp(source, sink)` signature | SDK, minimal | `transform=` / `settings=` are deferred to their phases (6 / 2) as non-breaking optional params, not added speculatively. |
