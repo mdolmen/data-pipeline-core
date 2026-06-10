@@ -21,7 +21,7 @@ from data_pipeline_core.storage.protocols import (
     Transform,
     WriteResult,
 )
-from data_pipeline_core.storage.redis_cache import redis_latest_sink
+from data_pipeline_core.storage.redis_cache import make_redis, redis_latest_sink
 from data_pipeline_core.storage.staging import raw_landing_sink, raw_landing_source
 
 try:
@@ -42,6 +42,7 @@ __all__ = [
     "__version__",
     "deterministic_id",
     "dlt_sink",
+    "make_redis",
     "raw_landing_sink",
     "raw_landing_source",
     "redis_latest_sink",
