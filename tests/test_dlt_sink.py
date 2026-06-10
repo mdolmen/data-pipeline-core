@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import glob
+import os
 from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
+from deltalake import DeltaTable
 
 from data_pipeline_core import dlt_sink
 
@@ -30,3 +33,17 @@ def test_write_lands_parquet(filesystem_bucket: Path) -> None:
     assert obs_files, "no parquet landed for the obs table"
     rows = sum(pq.read_table(f).num_rows for f in obs_files)
     assert rows == 3
+
+
+def test_merge_primary_key_is_idempotent(filesystem_bucket: Path) -> None:
+    sink = dlt_sink(
+        dataset="odds", destination="filesystem", table_name="obs", primary_key="id"
+    )
+    rows = [{"id": "a", "v": 1}, {"id": "b", "v": 2}]
+
+    sink.write(rows)
+    sink.write(rows)  # replay the same records → upsert, not duplicate
+
+    logs = glob.glob(f"{filesystem_bucket}/**/_delta_log", recursive=True)
+    table = DeltaTable(os.path.dirname(logs[0]))
+    assert table.to_pyarrow_table().num_rows == 2

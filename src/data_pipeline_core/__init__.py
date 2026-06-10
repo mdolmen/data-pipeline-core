@@ -13,6 +13,7 @@ from data_pipeline_core.runtime.app import WorkerApp
 from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.storage.dlt_sink import dlt_sink
+from data_pipeline_core.storage.ids import deterministic_id
 from data_pipeline_core.storage.protocols import (
     Record,
     Sink,
@@ -20,6 +21,7 @@ from data_pipeline_core.storage.protocols import (
     Transform,
     WriteResult,
 )
+from data_pipeline_core.storage.redis_cache import redis_latest_sink
 from data_pipeline_core.storage.staging import raw_landing_sink, raw_landing_source
 
 try:
@@ -38,7 +40,9 @@ __all__ = [
     "WorkerApp",
     "WriteResult",
     "__version__",
+    "deterministic_id",
     "dlt_sink",
     "raw_landing_sink",
     "raw_landing_source",
+    "redis_latest_sink",
 ]
