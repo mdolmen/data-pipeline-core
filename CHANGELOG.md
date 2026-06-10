@@ -10,6 +10,15 @@ is cut.
 
 ### Added
 
+- **Phase 7 — storage maturity (GCS-only + optional Redis hot tier).**
+  `storage/ids.py` — `deterministic_id(*parts)` for stable record ids.
+  `dlt_sink` gains `primary_key` → idempotent dlt `merge`; on the filesystem
+  destination it auto-selects **Delta Lake**, giving ACID upsert on plain GCS
+  objects with no database service. `redis_latest_sink` upserts each record as
+  the latest snapshot per key — the optional hot store, idempotent by
+  construction. `make_redis` is exported at the top level. `dlt[deltalake]` is
+  a runtime dep. **Scope change (user decision):** Postgres/Cloud SQL is dropped
+  in favour of Delta-on-GCS for cold idempotency and Redis for hot state.
 - **Phase 6 — transform & staging.** `Transform` protocol
   (`transform(record, ctx) -> Iterable[Record]`) and an optional `transform=`
   slot on `WorkerApp`, applied in-process (streamed) between fetch and write.
@@ -91,6 +100,9 @@ Polytricks instance — see `TODO.md`.
 | Margin removal / odds normalization | Stays in betting | Pure business logic over the generic `Transform` slot. |
 | Raw-landing transport | fsspec (`file://`/`gs://`); Pub/Sub deferred | GCS-raw covers replayable handoff and is verifiable locally; Pub/Sub needs GCP. |
 | `stage` label across all series | SDK, frozen surface (added pre-deploy) | Distinguishes ingest vs transform on shared dashboards; added now while no dashboards are deployed, so not a breaking relabel. |
+| Hot store: Delta-on-GCS + Redis, **not Postgres** | SDK; user decision | GCS-only keeps cost/ops minimal (no always-on Cloud SQL). Delta gives ACID merge on objects for cold idempotency; Redis covers latest-state. Postgres/BigQuery remain reachable via dlt `destination=` if a consumer ever needs SQL serving. |
+| `deterministic_id` | SDK, generic | The hash is generic; which fields identify a record is business logic (betting passes bookmaker/match/market/time). |
+| Idempotency model | Replay-of-raw, not re-fetch | Re-running a transform over immutable raw upserts (same ids); a fresh fetch is a legitimately new tick. Matches the staging/replay design. |
 | `dlt` (load layer) | SDK, runtime dep | Generic schema-inference + parquet load behind `dlt_sink`; the canonical/business schema stays in the project. |
 | Destination (`file://` vs `gs://`) | SDK, config-driven | One `dlt_sink`; local vs GCS is dlt config (`DESTINATION__FILESYSTEM__BUCKET_URL`), not a code fork. |
 | `WorkerApp(source, sink)` signature | SDK, minimal | `transform=` / `settings=` are deferred to their phases (6 / 2) as non-breaking optional params, not added speculatively. |

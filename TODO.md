@@ -138,10 +138,15 @@ in-process in a single worker.
 
 ## Phase 7 — Storage maturity
 
-- [ ] `storage/ids.py` — deterministic hash for dedup / idempotent writes
-- [ ] dlt sink: Postgres upsert destination (hot state) alongside GCS (cold)
-- [ ] Idempotency: re-running a worker doesn't duplicate rows
-- [ ] **Betting:** odds upsert to Cloud SQL + cold Parquet to GCS, both idempotent
+- [x] `storage/ids.py` — deterministic hash for dedup / idempotent writes
+- [x] dlt sink: idempotent merge (hot state) alongside GCS (cold)
+      _**scope change** (user decision): GCS-only with Redis as the optional hot
+      tier — no Postgres/Cloud SQL. Cold idempotency is a Delta Lake merge on GCS
+      (ACID upsert, no service); hot state is `redis_latest_sink`._
+- [x] Idempotency: re-running a worker doesn't duplicate rows
+- [x] **Betting:** odds upsert to Redis (optional) + cold Delta to GCS, both
+      idempotent _(verified via CLI + tests: 2 transform replays → curated stays
+      at 3 rows; Redis keeps one snapshot per match)_
 
 ## Phase 8 — Hardening & first release
 
@@ -149,8 +154,6 @@ in-process in a single worker.
 - [ ] `mypy --strict` clean; public API typed and exported from `__init__.py`
 - [ ] Docstrings + README usage example (the `WorkerApp(...).run()` pattern)
 - [ ] Build & publish **v0.1.0** to private Artifact Registry
-- [ ] **Betting:** drop the editable path override, pin `data-pipeline-core==0.1.*`,
-      CI tests against the published version
 
 ---
 
