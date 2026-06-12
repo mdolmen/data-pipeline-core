@@ -74,6 +74,14 @@ is cut.
   `httpx_mock` fixture from pytest-httpx. The package is a hollow but importable
   scaffold; the public contract arrives in Phase 1.
 
+### Fixed
+
+- **PEP 561 `py.typed` marker** added to the package, so consumers see the
+  SDK's inline type hints instead of treating it as untyped. Surfaced by
+  `proba-markets-analysis` enabling `mypy --strict`: without the marker, every
+  `from data_pipeline_core import ...` raised `import-untyped`, cascading into
+  spurious subclass-`Any` and `no-any-return` errors downstream.
+
 ## Decision log
 
 What went **into the SDK**, what stayed **in the consuming project**, and what is
