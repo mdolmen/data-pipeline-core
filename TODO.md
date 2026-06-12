@@ -157,6 +157,29 @@ in-process in a single worker.
 
 ---
 
+## Backlog — deferred follow-ups (surfaced by betting Phase 1)
+
+Tracked, not blocking v0.1.0. Promote when a real consumer genuinely needs them.
+
+- [ ] **Pub/Sub staging variant** — `raw_landing_sink` / `raw_landing_source` over
+      Pub/Sub (publish on ingest, subscribe on transform), alongside the current
+      fsspec JSONL handoff. Betting wants event-driven fetch→transform; the
+      file/GCS-raw handoff covers it meanwhile. Deferred until a real GCP target
+      exists (already flagged in `storage/staging.py`).
+- [ ] **Always-on transform archetype** — a long-running subscriber service (vs the
+      one-shot Cloud Run Job) for "always-on" transform consumption. New runtime
+      model; build only when a consumer needs continuous (not scheduled/triggered)
+      processing.
+
+**Not SDK — belongs to `data-pipeline-infra`:**
+- Raw-landing **retention** (e.g. betting's 7 days) → GCS bucket lifecycle rule;
+  the retention period is a consumer config value.
+- Transform **run frequency** (always-on / scheduled / fixed interval) → Cloud
+  Scheduler (cron/interval) + Pub/Sub push subscriptions. The SDK worker stays a
+  one-shot job; triggering is infra.
+
+---
+
 ## Definition of done — cut v0.1.0 only when ALL hold
 
 - [ ] Betting runs entirely on the SDK, behavior parity demonstrated
@@ -180,6 +203,11 @@ what is **deferred** (generalize on the 2nd real usage). Maintain in
 
 | Item | Decision | Rationale |
 |---|---|---|
-| _e.g. IP guard thresholds_ | SDK, as config defaults | mechanism generic, values betting-specific |
-| _e.g. entity resolution (Marseille↔OM)_ | stays in betting | pure business logic |
-| _e.g. raw-landing staging adapters_ | SDK | generic handoff; `transform()` logic stays in betting |
+| IP guard thresholds | SDK, as config defaults | mechanism generic, values betting-specific |
+| entity resolution (Marseille↔OM) | stays in betting | pure business logic |
+| raw-landing staging adapters | SDK | generic handoff; `transform()` logic stays in betting |
+| `py.typed` marker | SDK (shipped) | consumers need PEP 561 to see inline types; surfaced by betting `mypy --strict` |
+| Pub/Sub staging variant | SDK, deferred | generic handoff, but no GCP target yet; fsspec JSONL covers dev/now |
+| raw retention (7 days) | infra, not SDK | GCS bucket lifecycle policy; period is a consumer config value |
+| transform run frequency | infra, not SDK | Cloud Scheduler / Pub/Sub push; the SDK worker stays one-shot |
+| console sink for dev confirmation | stays in betting | trivial project helper; promote only on a 2nd real usage |
