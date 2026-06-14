@@ -77,6 +77,7 @@ class WorkerApp:
             proxy_url=settings.proxy_url,
             enabled=settings.proxy_enabled,
             timeout_seconds=settings.http_timeout_seconds,
+            impersonate=settings.impersonate,
         )
         http = HttpClient(
             source_name,

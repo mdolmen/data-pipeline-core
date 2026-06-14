@@ -210,4 +210,5 @@ what is **deferred** (generalize on the 2nd real usage). Maintain in
 | Pub/Sub staging variant | SDK, deferred | generic handoff, but no GCP target yet; fsspec JSONL covers dev/now |
 | raw retention (7 days) | infra, not SDK | GCS bucket lifecycle policy; period is a consumer config value |
 | transform run frequency | infra, not SDK | Cloud Scheduler / Pub/Sub push; the SDK worker stays one-shot |
+| browser-TLS impersonation (`curl_cffi`) | SDK, as config (`impersonate`) | generic anti-bot mechanism (JA3/JA4), like the proxy; profile value is consumer config |
 | console sink for dev confirmation | stays in betting | trivial project helper; promote only on a 2nd real usage |

@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 30.0
     http_max_retries: int = 3
     http_backoff_base_seconds: float = 0.5
+    # Browser-TLS impersonation for anti-bot targets (JA3/JA4 fingerprinting).
+    # None → standard httpx; a curl_cffi profile (e.g. "chrome") → browser TLS.
+    impersonate: str | None = None
     http_user_agents: tuple[str, ...] = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",

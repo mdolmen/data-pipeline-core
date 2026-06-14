@@ -16,6 +16,7 @@ keywords = ["gcp", "data-pipeline", "ingestion", "etl", "cloud-run"]
 #   - redis (Phase 5): IP-guard sliding-window counters + latest-state cache.
 #   - dlt[deltalake] (Phase 7): ACID merge/upsert on GCS objects (idempotency).
 dependencies = [
+    "curl-cffi>=0.15.0",
     "dlt[filesystem,parquet,deltalake]>=1,<2",
     "prometheus-client>=0.20",
     "pydantic-settings>=2,<3",
@@ -60,8 +61,9 @@ module = ["fakeredis.*", "dlt.*", "fsspec.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# pyarrow / deltalake ship partial types; skip following so calls are untyped-safe.
-module = ["pyarrow.*", "deltalake.*"]
+# pyarrow / deltalake / curl_cffi ship partial or over-strict (Literal) types;
+# skip following so our dynamic calls into them are untyped-safe.
+module = ["pyarrow.*", "deltalake.*", "curl_cffi.*"]
 follow_imports = "skip"
 ignore_missing_imports = true
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import httpx
 
+from data_pipeline_core.ingestion.impersonation import Client, make_client
 from data_pipeline_core.ingestion.ip_guard import Mode
 
 
@@ -23,11 +24,17 @@ class ProxyRouter:
         proxy_url: str | None,
         enabled: bool,
         timeout_seconds: float,
+        impersonate: str | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.enabled = bool(enabled and proxy_url)
-        self._client = (
-            httpx.Client(proxy=proxy_url, timeout=timeout_seconds, transport=transport)
+        self._client: Client | None = (
+            make_client(
+                impersonate,
+                timeout=timeout_seconds,
+                proxy=proxy_url,
+                transport=transport,
+            )
             if self.enabled
             else None
         )
@@ -38,7 +45,7 @@ class ProxyRouter:
         return force or mode is Mode.AGGRESSIVE
 
     @property
-    def client(self) -> httpx.Client | None:
+    def client(self) -> Client | None:
         return self._client
 
     def close(self) -> None:

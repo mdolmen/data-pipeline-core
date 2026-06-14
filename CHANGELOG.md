@@ -10,6 +10,15 @@ is cut.
 
 ### Added
 
+- **Browser-TLS impersonation (`curl_cffi`).** New `impersonate` setting (e.g.
+  `"chrome"`): when set, the HTTP client swaps `httpx` for `curl_cffi` so the
+  TLS/HTTP2 handshake matches a real browser, defeating JA3/JA4 fingerprinting
+  (DataDome/Akamai) that a proxy can't — the fingerprint, not the IP, is what's
+  blocked. `ingestion/impersonation.py` wraps it behind an httpx-shaped shim
+  (raises `httpx.TransportError` on failure), so retry/breaker/proxy handling is
+  unchanged; both the direct and proxied clients honour `impersonate`. Surfaced
+  by `proba-markets-analysis`: betclic.fr blocked httpx but returned 200 to curl
+  from the same IP.
 - **Phase 7 — storage maturity (GCS-only + optional Redis hot tier).**
   `storage/ids.py` — `deterministic_id(*parts)` for stable record ids.
   `dlt_sink` gains `primary_key` → idempotent dlt `merge`; on the filesystem

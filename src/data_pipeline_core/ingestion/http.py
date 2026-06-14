@@ -19,6 +19,7 @@ import httpx
 from structlog.typing import FilteringBoundLogger
 
 from data_pipeline_core.ingestion.circuit_breaker import CircuitBreaker
+from data_pipeline_core.ingestion.impersonation import Client, Response, make_client
 from data_pipeline_core.ingestion.ip_guard import IpGuard, Mode
 from data_pipeline_core.ingestion.proxy import ProxyRouter
 from data_pipeline_core.obs.metrics import StandardMetrics
@@ -57,25 +58,26 @@ class HttpClient:
         self._sleep = sleep
         self._rng = random.Random()
         self._user_agents = tuple(settings.http_user_agents)
-        self._client = httpx.Client(
-            timeout=settings.http_timeout_seconds, transport=transport
+        self._client: Client = make_client(
+            settings.impersonate,
+            timeout=settings.http_timeout_seconds,
+            transport=transport,
         )
         self.request_count = 0
         self.proxied_count = 0
 
-    def get(
-        self, url: str, *, force_proxy: bool = False, **kwargs: Any
-    ) -> httpx.Response:
+    def get(self, url: str, *, force_proxy: bool = False, **kwargs: Any) -> Response:
         return self.request("GET", url, force_proxy=force_proxy, **kwargs)
 
     def request(
         self, method: str, url: str, *, force_proxy: bool = False, **kwargs: Any
-    ) -> httpx.Response:
+    ) -> Response:
         if self._breaker.is_open:
             raise CircuitOpenError(f"circuit open for source {self._source!r}")
 
         headers = dict(kwargs.pop("headers", None) or {})
-        if self._user_agents:
+        # When impersonating, curl_cffi sets a matching browser UA — don't override it.
+        if self._user_agents and not self._settings.impersonate:
             headers.setdefault("User-Agent", self._rng.choice(self._user_agents))
 
         mode = self._ip_guard.evaluate() if self._ip_guard is not None else Mode.SAFE
