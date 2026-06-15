@@ -10,6 +10,12 @@ is cut.
 
 ### Added
 
+- **Streaming responses (`HttpClient.stream`).** Yields response body chunks for
+  streaming endpoints (e.g. gRPC-web server streams) under the same breaker /
+  IP-guard / proxy guards as `request` (no retry — a stream can't be replayed).
+  The caller reads what it needs and stops. Works on both the httpx and
+  curl_cffi backends. Surfaced by betclic's `…WithNotifications` odds endpoint,
+  which never closes; the consumer reads just the first frame.
 - **Browser-TLS impersonation (`curl_cffi`).** New `impersonate` setting (e.g.
   `"chrome"`): when set, the HTTP client swaps `httpx` for `curl_cffi` so the
   TLS/HTTP2 handshake matches a real browser, defeating JA3/JA4 fingerprinting

@@ -14,6 +14,7 @@ raises ``httpx.TransportError`` on failure, so retry/breaker handling is unchang
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
@@ -96,6 +97,36 @@ class _CurlClient:
             # Normalize to httpx's transport error so the run loop retries it.
             raise httpx.TransportError(str(exc)) from exc
         return _CurlResponse(raw)
+
+    def stream(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        content: bytes | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Iterator[bytes]:
+        """Yield response body chunks (for streaming endpoints), then close."""
+        from curl_cffi.requests.exceptions import RequestException
+
+        try:
+            response = self._session.request(
+                method,
+                url,
+                headers=headers,
+                data=content,
+                params=params,
+                timeout=self._timeout,
+                proxies=self._proxies,
+                stream=True,
+            )
+        except RequestException as exc:
+            raise httpx.TransportError(str(exc)) from exc
+        try:
+            yield from response.iter_content()
+        finally:
+            response.close()
 
     def close(self) -> None:
         self._session.close()

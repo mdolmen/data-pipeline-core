@@ -12,14 +12,19 @@ from __future__ import annotations
 
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any
 
 import httpx
 from structlog.typing import FilteringBoundLogger
 
 from data_pipeline_core.ingestion.circuit_breaker import CircuitBreaker
-from data_pipeline_core.ingestion.impersonation import Client, Response, make_client
+from data_pipeline_core.ingestion.impersonation import (
+    Client,
+    Response,
+    _CurlClient,
+    make_client,
+)
 from data_pipeline_core.ingestion.ip_guard import IpGuard, Mode
 from data_pipeline_core.ingestion.proxy import ProxyRouter
 from data_pipeline_core.obs.metrics import StandardMetrics
@@ -135,6 +140,51 @@ class HttpClient:
 
         assert transport_error is not None  # loop only exits here via continue
         raise transport_error
+
+    def stream(
+        self, method: str, url: str, *, force_proxy: bool = False, **kwargs: Any
+    ) -> Iterator[bytes]:
+        """Yield response body chunks — for streaming endpoints (e.g. gRPC-web).
+
+        Same breaker / IP-guard / proxy guards as ``request``; no retry (a stream
+        can't be safely replayed). The caller reads as much as it needs and stops.
+        """
+        if self._breaker.is_open:
+            raise CircuitOpenError(f"circuit open for source {self._source!r}")
+
+        headers = dict(kwargs.pop("headers", None) or {})
+        if self._user_agents and not self._settings.impersonate:
+            headers.setdefault("User-Agent", self._rng.choice(self._user_agents))
+
+        mode = self._ip_guard.evaluate() if self._ip_guard is not None else Mode.SAFE
+        if mode in (Mode.WARNING, Mode.AGGRESSIVE):
+            self._sleep(self._rng.uniform(0, self._settings.warning_jitter_seconds))
+
+        client = self._client
+        use_proxy = False
+        if self._proxy is not None and self._proxy.should_use(mode, force=force_proxy):
+            proxied = self._proxy.client
+            if proxied is not None:
+                client, use_proxy = proxied, True
+        if use_proxy:
+            self.proxied_count += 1
+
+        self.request_count += 1
+        if self._log is not None:
+            self._log.info("http stream", method=method, url=url, proxied=use_proxy)
+
+        if isinstance(client, _CurlClient):
+            yield from client.stream(
+                method,
+                url,
+                headers=headers,
+                content=kwargs.get("content"),
+                params=kwargs.get("params"),
+            )
+        else:
+            with client.stream(method, url, headers=headers, **kwargs) as response:
+                self._record_status(response.status_code)
+                yield from response.iter_bytes()
 
     def close(self) -> None:
         self._client.close()

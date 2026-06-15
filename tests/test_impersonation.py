@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any, ClassVar
 
 import curl_cffi.requests
@@ -78,3 +79,25 @@ def test_curl_error_normalized_to_httpx_transport_error(
     # Normalized so the run loop retries it like any other transport failure.
     with pytest.raises(httpx.TransportError):
         client.request("GET", "https://x")
+
+
+def test_impersonate_streams_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _StreamResponse:
+        status_code = 200
+
+        def iter_content(self) -> Iterator[bytes]:
+            yield b"ab"
+            yield b"cd"
+
+        def close(self) -> None: ...
+
+    class _StreamSession(_FakeSession):
+        def request(self, method: str, url: str, **kwargs: Any) -> _StreamResponse:  # type: ignore[override]
+            assert kwargs.get("stream") is True
+            return _StreamResponse()
+
+    monkeypatch.setattr(curl_cffi.requests, "Session", _StreamSession)
+    client = make_client("chrome", timeout=5.0)
+    assert isinstance(client, _CurlClient)
+
+    assert b"".join(client.stream("POST", "https://x", content=b"q")) == b"abcd"

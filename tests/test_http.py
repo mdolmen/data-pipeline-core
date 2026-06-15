@@ -143,3 +143,13 @@ def test_proxy_disabled_by_config_keeps_direct(httpx_mock: HTTPXMock) -> None:
 
     assert response.status_code == 200
     assert client.proxied_count == 0  # never routed through the proxy
+
+
+def test_stream_yields_body_chunks(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(content=b"chunk-one-two-three")
+    client, _, _ = _client()
+
+    body = b"".join(client.stream("GET", "https://api.test/stream"))
+
+    assert body == b"chunk-one-two-three"
+    assert client.request_count == 1
