@@ -100,11 +100,28 @@ class HttpClient:
                 response = client.request(method, url, headers=headers, **kwargs)
             except httpx.TransportError as exc:
                 transport_error = exc
+                if self._log is not None:
+                    self._log.warning(
+                        "http request failed",
+                        method=method,
+                        url=url,
+                        attempt=attempt + 1,
+                        error=str(exc),
+                    )
                 self._backoff(attempt)
                 continue
 
             self.request_count += 1
             self._record_status(response.status_code)
+            if self._log is not None:
+                self._log.info(
+                    "http request",
+                    method=method,
+                    url=url,
+                    status=response.status_code,
+                    proxied=use_proxy,
+                    attempt=attempt + 1,
+                )
 
             if response.status_code == 429:
                 self._breaker.record_failure()
