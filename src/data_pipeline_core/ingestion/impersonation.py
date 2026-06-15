@@ -14,7 +14,7 @@ raises ``httpx.TransportError`` on failure, so retry/breaker handling is unchang
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
@@ -67,8 +67,10 @@ class _CurlClient:
     ) -> None:
         from curl_cffi import requests as cffi
 
+        self._impersonate = impersonate
         self._session = cffi.Session(impersonate=impersonate)
         self._timeout = timeout
+        self._proxy = proxy
         self._proxies = {"http": proxy, "https": proxy} if proxy else None
 
     def request(
@@ -98,35 +100,77 @@ class _CurlClient:
             raise httpx.TransportError(str(exc)) from exc
         return _CurlResponse(raw)
 
-    def stream(
+    def read_until(
         self,
         method: str,
         url: str,
         *,
+        until: Callable[[bytes], bool],
         headers: dict[str, str] | None = None,
         content: bytes | None = None,
-        params: dict[str, Any] | None = None,
-    ) -> Iterator[bytes]:
-        """Yield response body chunks (for streaming endpoints), then close."""
-        from curl_cffi.requests.exceptions import RequestException
+    ) -> tuple[int, bytes]:
+        """Stream a request and abort the instant ``until(buffer)`` is true.
 
-        try:
-            response = self._session.request(
-                method,
-                url,
-                headers=headers,
-                data=content,
-                params=params,
-                timeout=self._timeout,
-                proxies=self._proxies,
-                stream=True,
+        For server streams that never close (e.g. gRPC-web ``…WithNotifications``):
+        the snapshot is the first frame and arrives at once, but the connection
+        then stays open. curl_cffi's graceful stop only fires on the *next* write
+        callback — which an idle stream never delivers — so a normal close blocks
+        for tens of seconds. Here we drive curl at the low level and abort from
+        inside the write callback (``CURL_WRITEFUNC_ERROR``) the moment ``until``
+        is satisfied, so teardown is immediate. The caller owns ``headers`` in
+        full (browser identity included); we keep the TLS fingerprint but let curl
+        own ``Accept-Encoding`` so it decompresses for us.
+        """
+        from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt
+        from curl_cffi.curl import CURL_WRITEFUNC_ERROR
+
+        buffer = bytearray()
+        aborted = False
+
+        abort_code = int(CURL_WRITEFUNC_ERROR)
+
+        def writer(chunk: bytes) -> int:
+            nonlocal aborted
+            buffer.extend(chunk)
+            if not aborted and until(bytes(buffer)):
+                aborted = True
+                return abort_code  # stop perform now — predicate met
+            return len(chunk)
+
+        c = Curl()
+        c.setopt(CurlOpt.URL, url.encode())
+        if method.upper() == "POST":
+            c.setopt(CurlOpt.POST, 1)
+            if content is not None:
+                c.setopt(CurlOpt.POSTFIELDS, content)
+                c.setopt(CurlOpt.POSTFIELDSIZE, len(content))
+        elif method.upper() != "GET":
+            c.setopt(CurlOpt.CUSTOMREQUEST, method.upper().encode())
+        if headers:
+            c.setopt(
+                CurlOpt.HTTPHEADER, [f"{k}: {v}".encode() for k, v in headers.items()]
             )
-        except RequestException as exc:
-            raise httpx.TransportError(str(exc)) from exc
+        c.setopt(CurlOpt.WRITEFUNCTION, writer)
+        c.setopt(CurlOpt.ACCEPT_ENCODING, b"")  # advertise + auto-decompress
+        c.setopt(CurlOpt.TIMEOUT, max(1, int(self._timeout)))
+        if self._proxy:
+            c.setopt(CurlOpt.PROXY, self._proxy.encode())
+        # Headers first, then impersonate, matching curl_cffi's own ordering.
+        c.impersonate(self._impersonate, default_headers=False)
         try:
-            yield from response.iter_content()
-        finally:
-            response.close()
+            c.perform()
+        except CurlError as exc:
+            # A predicate-driven abort surfaces as CurlError; that's expected.
+            # Anything else with no HTTP status is a real transport failure.
+            if not aborted:
+                status = int(c.getinfo(CurlInfo.RESPONSE_CODE))
+                c.close()
+                if status == 0:
+                    raise httpx.TransportError(str(exc)) from exc
+                return status, bytes(buffer)
+        status = int(c.getinfo(CurlInfo.RESPONSE_CODE))
+        c.close()
+        return status, bytes(buffer)
 
     def close(self) -> None:
         self._session.close()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any, ClassVar
 
 import curl_cffi.requests
@@ -81,23 +80,44 @@ def test_curl_error_normalized_to_httpx_transport_error(
         client.request("GET", "https://x")
 
 
-def test_impersonate_streams_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _StreamResponse:
-        status_code = 200
+def test_read_until_aborts_when_predicate_met(monkeypatch: pytest.MonkeyPatch) -> None:
+    import curl_cffi
+    from curl_cffi import CurlError, CurlOpt
+    from curl_cffi.curl import CURL_WRITEFUNC_ERROR
 
-        def iter_content(self) -> Iterator[bytes]:
-            yield b"ab"
-            yield b"cd"
+    class _FakeCurl:
+        """Drives the write callback with canned chunks, like a streaming POST."""
+
+        chunks: ClassVar[list[bytes]] = [b"ab", b"cdef", b"ghij"]
+
+        def __init__(self) -> None:
+            self._writer: Any = None
+
+        def setopt(self, opt: int, value: Any) -> int:
+            if opt == CurlOpt.WRITEFUNCTION:
+                self._writer = value
+            return 0
+
+        def impersonate(self, target: str, default_headers: bool = True) -> int:
+            return 0
+
+        def perform(self) -> None:
+            for chunk in self.chunks:
+                if self._writer(chunk) == CURL_WRITEFUNC_ERROR:
+                    raise CurlError("aborted by callback")
+
+        def getinfo(self, info: int) -> int:
+            return 200
 
         def close(self) -> None: ...
 
-    class _StreamSession(_FakeSession):
-        def request(self, method: str, url: str, **kwargs: Any) -> _StreamResponse:  # type: ignore[override]
-            assert kwargs.get("stream") is True
-            return _StreamResponse()
-
-    monkeypatch.setattr(curl_cffi.requests, "Session", _StreamSession)
+    monkeypatch.setattr(curl_cffi, "Curl", _FakeCurl)
     client = make_client("chrome", timeout=5.0)
     assert isinstance(client, _CurlClient)
 
-    assert b"".join(client.stream("POST", "https://x", content=b"q")) == b"abcd"
+    # Predicate trips once >=3 bytes are buffered: ab (2) -> abcdef (6) -> abort.
+    status, body = client.read_until(
+        "POST", "https://x", until=lambda b: len(b) >= 3, content=b"q"
+    )
+    assert status == 200
+    assert body == b"abcdef"  # third chunk never delivered — we aborted

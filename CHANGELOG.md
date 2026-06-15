@@ -10,12 +10,20 @@ is cut.
 
 ### Added
 
-- **Streaming responses (`HttpClient.stream`).** Yields response body chunks for
-  streaming endpoints (e.g. gRPC-web server streams) under the same breaker /
-  IP-guard / proxy guards as `request` (no retry — a stream can't be replayed).
-  The caller reads what it needs and stops. Works on both the httpx and
-  curl_cffi backends. Surfaced by betclic's `…WithNotifications` odds endpoint,
-  which never closes; the consumer reads just the first frame.
+- **Read-until-predicate with instant abort (`HttpClient.read_until`).** Streams
+  a request and returns the body the moment a caller predicate (`until(buffer)`)
+  is satisfied, under the same breaker / IP-guard / proxy guards as `request` (no
+  retry — a stream can't be replayed). On the curl_cffi backend it drives curl at
+  the low level and aborts from inside the write callback
+  (`CURL_WRITEFUNC_ERROR`) the instant the predicate trips, so a never-closing
+  server stream is torn down immediately; on httpx it stops iterating and closes
+  the context. Surfaced by betclic's `…WithNotifications` odds endpoint: the
+  snapshot is the first gRPC-web frame and arrives in ~100 ms, but the stream
+  never closes — a graceful close blocked ~30–40 s (curl_cffi only checks its
+  stop flag on the *next* write callback, which an idle stream never delivers),
+  so the consumer reads the first frame and aborts, the browser's own behaviour.
+  On this low-level path the caller owns the full header set (browser identity
+  included); curl owns `Accept-Encoding` so it still decompresses.
 - **Browser-TLS impersonation (`curl_cffi`).** New `impersonate` setting (e.g.
   `"chrome"`): when set, the HTTP client swaps `httpx` for `curl_cffi` so the
   TLS/HTTP2 handshake matches a real browser, defeating JA3/JA4 fingerprinting

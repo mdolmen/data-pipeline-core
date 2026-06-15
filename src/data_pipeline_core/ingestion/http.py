@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import random
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -141,13 +141,23 @@ class HttpClient:
         assert transport_error is not None  # loop only exits here via continue
         raise transport_error
 
-    def stream(
-        self, method: str, url: str, *, force_proxy: bool = False, **kwargs: Any
-    ) -> Iterator[bytes]:
-        """Yield response body chunks — for streaming endpoints (e.g. gRPC-web).
+    def read_until(
+        self,
+        method: str,
+        url: str,
+        *,
+        until: Callable[[bytes], bool],
+        force_proxy: bool = False,
+        **kwargs: Any,
+    ) -> bytes:
+        """Stream a request and return the body once ``until(buffer)`` is true.
 
-        Same breaker / IP-guard / proxy guards as ``request``; no retry (a stream
-        can't be safely replayed). The caller reads as much as it needs and stops.
+        For streaming endpoints (e.g. gRPC-web server streams) where only the
+        first frame is wanted and the connection never closes on its own. The
+        same breaker / IP-guard / proxy guards as ``request`` apply; there is no
+        retry (a stream can't be safely replayed). On the impersonating backend
+        the connection is aborted the instant the predicate is met, so there is
+        no graceful-close wait; on httpx we stop iterating and close the context.
         """
         if self._breaker.is_open:
             raise CircuitOpenError(f"circuit open for source {self._source!r}")
@@ -171,20 +181,44 @@ class HttpClient:
 
         self.request_count += 1
         if self._log is not None:
-            self._log.info("http stream", method=method, url=url, proxied=use_proxy)
+            self._log.info("http read_until", method=method, url=url, proxied=use_proxy)
 
         if isinstance(client, _CurlClient):
-            yield from client.stream(
+            status, body = client.read_until(
                 method,
                 url,
+                until=until,
                 headers=headers,
                 content=kwargs.get("content"),
-                params=kwargs.get("params"),
             )
         else:
-            with client.stream(method, url, headers=headers, **kwargs) as response:
-                self._record_status(response.status_code)
-                yield from response.iter_bytes()
+            status, body = self._httpx_read_until(
+                client, method, url, headers, kwargs.get("content"), until
+            )
+
+        self._record_status(status)
+        if status == 429:
+            self._breaker.record_failure()
+        elif 200 <= status < 300:
+            self._breaker.record_success()
+        return body
+
+    @staticmethod
+    def _httpx_read_until(
+        client: httpx.Client,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        content: bytes | None,
+        until: Callable[[bytes], bool],
+    ) -> tuple[int, bytes]:
+        with client.stream(method, url, headers=headers, content=content) as response:
+            buffer = bytearray()
+            for chunk in response.iter_bytes():
+                buffer.extend(chunk)
+                if until(bytes(buffer)):
+                    break
+            return response.status_code, bytes(buffer)
 
     def close(self) -> None:
         self._client.close()
