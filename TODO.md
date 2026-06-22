@@ -170,6 +170,19 @@ Tracked, not blocking v0.1.0. Promote when a real consumer genuinely needs them.
       one-shot Cloud Run Job) for "always-on" transform consumption. New runtime
       model; build only when a consumer needs continuous (not scheduled/triggered)
       processing.
+- [ ] **Single-work-unit run (granularity)** — let a worker run for *one* source
+      work unit per invocation (e.g. a single competition), selected by config/env,
+      instead of looping all units. **Prereq for `data-pipeline-infra` v2**
+      (per-unit Cloud Tasks fan-out — one self-paced chain per unit). Today's
+      source loops all units (fine for v1's whole-source cron); v2 needs a
+      "target one unit" path. Mechanism generic; the unit is consumer-defined.
+- [ ] **Scheduling hint (`next_run_seconds`)** — an optional typed value a worker
+      emits at end of run (e.g. `RunContext.request_next_run(delay_seconds)` or
+      returned from `run()`) so infra self-paces the next invocation per unit
+      (Cloud Tasks `schedule_time`). The narrow-waist business→infra contract: a
+      single clamped scalar, infra enforces `[min,max]`, the consumer computes the
+      value. **Prereq for `data-pipeline-infra` v2.** Deferred like Pub/Sub —
+      declare the seam, build the emitter when v2 lands.
 
 **Not SDK — belongs to `data-pipeline-infra`:**
 - Raw-landing **retention** (e.g. betting's 7 days) → GCS bucket lifecycle rule;
@@ -210,5 +223,7 @@ what is **deferred** (generalize on the 2nd real usage). Maintain in
 | Pub/Sub staging variant | SDK, deferred | generic handoff, but no GCP target yet; fsspec JSONL covers dev/now |
 | raw retention (7 days) | infra, not SDK | GCS bucket lifecycle policy; period is a consumer config value |
 | transform run frequency | infra, not SDK | Cloud Scheduler / Pub/Sub push; the SDK worker stays one-shot |
+| single-work-unit run (granularity) | SDK, deferred (infra v2) | per-unit cadence needs targeting one unit; v1 loops all. Mechanism generic; the unit (e.g. competition) is consumer-defined |
+| scheduling hint (`next_run_seconds`) | SDK, deferred (infra v2) | narrow-waist business→infra contract; worker emits one clamped scalar, infra (Cloud Tasks) self-paces, consumer computes the value |
 | browser-TLS impersonation (`curl_cffi`) | SDK, as config (`impersonate`) | generic anti-bot mechanism (JA3/JA4), like the proxy; profile value is consumer config |
 | console sink for dev confirmation | stays in betting | trivial project helper; promote only on a 2nd real usage |
