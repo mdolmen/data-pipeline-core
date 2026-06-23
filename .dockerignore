@@ -1,0 +1,13 @@
+# Used when data-pipeline-core is pulled in as a build context (e.g. the
+# proba-markets-analysis worker image). Keep source + packaging; drop the rest.
+.venv
+.git
+.ruff_cache
+.mypy_cache
+.pytest_cache
+**/__pycache__
+*.pyc
+.DS_Store
+tests
+htmlcov
+.coverage
