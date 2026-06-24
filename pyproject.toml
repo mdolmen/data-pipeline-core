@@ -15,9 +15,17 @@ keywords = ["gcp", "data-pipeline", "ingestion", "etl", "cloud-run"]
 #   - prometheus-client (Phase 3): standard metric series + end-of-run push.
 #   - redis (Phase 5): IP-guard sliding-window counters + latest-state cache.
 #   - dlt[deltalake] (Phase 7): ACID merge/upsert on GCS objects (idempotency).
+#   - httpx: the direct HTTP backend (ctx.http) — imported directly, so declared
+#     directly (was only present transitively via the dev-only pytest-httpx; a
+#     --no-dev container install dropped it).
+#   - fsspec + gcsfs: the storage layer reads/writes file:// locally and gs:// in
+#     cloud; gcsfs is the GCS backend fsspec/dlt need for gs:// objects.
 dependencies = [
     "curl-cffi>=0.15.0",
     "dlt[filesystem,parquet,deltalake]>=1,<2",
+    "fsspec>=2023",
+    "gcsfs>=2023",
+    "httpx>=0.27",
     "prometheus-client>=0.20",
     "pydantic-settings>=2,<3",
     "redis>=5",
