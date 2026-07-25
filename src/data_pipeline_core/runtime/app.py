@@ -21,6 +21,7 @@ from data_pipeline_core.ingestion.ip_guard import IpGuard
 from data_pipeline_core.ingestion.proxy import ProxyRouter
 from data_pipeline_core.obs.gmp_push import push_metrics
 from data_pipeline_core.obs.metrics import StandardMetrics
+from data_pipeline_core.obs.remote_write import remote_write_metrics
 from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.runtime.lifecycle import Lifecycle, handle_shutdown
@@ -129,12 +130,22 @@ class WorkerApp:
                 proxy.close()
                 if redis_client is not None:
                     redis_client.close()
-                push_metrics(
-                    registry,
-                    gateway_url=settings.metrics_push_gateway,
-                    job=source_name,
-                    logger=log,
-                )
+                if settings.metrics_remote_write_url:
+                    remote_write_metrics(
+                        registry,
+                        url=settings.metrics_remote_write_url,
+                        username=settings.metrics_remote_write_username,
+                        password=settings.metrics_remote_write_password,
+                        job=source_name,
+                        logger=log,
+                    )
+                else:
+                    push_metrics(
+                        registry,
+                        gateway_url=settings.metrics_push_gateway,
+                        job=source_name,
+                        logger=log,
+                    )
             return exit_code
 
     def _apply_transform(

@@ -28,8 +28,17 @@ class Settings(BaseSettings):
     raw_bucket_url: str | None = None
 
     # End-of-run metrics push. None → push is skipped (logged). A real
-    # deployment sets a PushGateway URL; GMP remote-write/OTLP is a later swap.
+    # deployment sets a PushGateway URL; the preferred path is remote-write below.
     metrics_push_gateway: str | None = None
+
+    # Prometheus remote-write (the preferred path for short-lived jobs — the worker
+    # writes its final series straight to a TSDB at exit, no PushGateway/scraper).
+    # url set → remote-write is used instead of the PushGateway. username/password
+    # are HTTP basic-auth (e.g. Grafana Cloud: username = instance id, password =
+    # an API token). The token comes from the environment/Secret Manager, never here.
+    metrics_remote_write_url: str | None = None
+    metrics_remote_write_username: str | None = None
+    metrics_remote_write_password: str | None = None
 
     # HTTP client (defaults betting-tuned, overridable per project).
     http_timeout_seconds: float = 30.0

@@ -10,6 +10,16 @@ is cut.
 
 ### Added
 
+- **Prometheus remote-write push (`obs/remote_write.py`).** The preferred
+  end-of-run metrics path for short-lived jobs: the worker writes its final series
+  straight to a TSDB (e.g. Grafana Cloud) at exit — no PushGateway + scraper
+  middle-boxes. `WorkerApp.run()` uses it when `metrics_remote_write_url` is set
+  (with `metrics_remote_write_username` / `metrics_remote_write_password` for HTTP
+  basic-auth), else falls back to the PushGateway path. Zero new dependencies: the
+  Protobuf `WriteRequest` is hand-encoded and Snappy is emitted as a single
+  literal block (spec-compliant, ~KB payloads so the skipped compression is free).
+  A push never raises — observability must not break ingestion. The token is read
+  from env/Secret Manager, never hard-coded.
 - **Technical-observability series (runs, errors, storage).** `StandardMetrics`
   gains three counters on the frozen surface: `worker_runs_total{status}` (one
   increment per completed run, `success`/`failure` — `sum` answers "how many

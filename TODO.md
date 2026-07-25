@@ -90,6 +90,12 @@ through the SDK. No resilience, minimal obs — just the spine.
       fallback (workers are short-lived → push, not scrape)
       _(PushGateway transport built; GMP remote-write/OTLP deferred to a real GCP
       target — config swap, not a code change)_
+- [x] `obs/remote_write.py` — **Prometheus remote-write** (the preferred path):
+      worker writes its final series straight to a TSDB at exit (Grafana Cloud),
+      no PushGateway/scraper. `WorkerApp` uses it when `metrics_remote_write_url` is
+      set, else the PushGateway fallback. Zero-dependency (hand-rolled Protobuf +
+      literal Snappy). Infra wiring (endpoint + token secret) in
+      `data-pipeline-infra` Phase 7.
 - [x] `WorkerApp.run()` wires metrics + push automatically
 - [x] **Betting:** metrics appear in GMP/Grafana Cloud; first dashboard panel live
       _(verified locally: worker emits the full standard series with the `source`
@@ -236,3 +242,5 @@ what is **deferred** (generalize on the 2nd real usage). Maintain in
 | technical-obs series (runs/errors/storage) | SDK | the worker is the only thing that knows it ran/errored/wrote N; part of the frozen surface, shared by all consumers |
 | technical dashboard (Grafana JSON) | infra, not SDK | generic over the frozen series but deployed by infra's Grafana provider; SDK = what's measured, infra = where it's shown |
 | `WriteResult.byte_count` | SDK, optional | sinks that can report volume cheaply do (raw landing); others leave `None` → `bytes_written_total` stays flat, no forced cost on every sink |
+| remote-write over PushGateway | SDK, preferred path | short-lived jobs → write to the TSDB at exit; a PushGateway needs an always-on box + scraper. PushGateway kept as fallback |
+| zero-dep remote-write (hand-rolled protobuf + literal snappy) | SDK | avoids `protobuf`/`cramjam`/`snappy` deps for a fixed tiny schema + KB payloads; keeps the SDK lean |
