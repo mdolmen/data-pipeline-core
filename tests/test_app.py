@@ -20,6 +20,12 @@ class _ListSink:
         return WriteResult(row_count=len(self.written))
 
 
+def _run_count(
+    registry: CollectorRegistry, labels: dict[str, str], status: str
+) -> float | None:
+    return registry.get_sample_value("worker_runs_total", {**labels, "status": status})
+
+
 @pytest.fixture
 def captured_registry(monkeypatch: pytest.MonkeyPatch) -> dict[str, CollectorRegistry]:
     """Capture the registry WorkerApp would push instead of pushing it."""
@@ -114,3 +120,37 @@ def test_run_sets_worker_up_zero_on_failure(
         registry.get_sample_value("worker_up", {"source": "boom", "stage": "ingest"})
         == 0
     )
+
+
+def test_run_counts_a_successful_run_and_rows_written(
+    captured_registry: dict[str, CollectorRegistry],
+) -> None:
+    class _Source:
+        name = "demo"
+
+        def fetch(self, ctx: RunContext) -> Iterable[Record]:
+            yield {"a": 1}
+            yield {"a": 2}
+
+    assert WorkerApp(_Source(), _ListSink()).run() == 0
+    registry = captured_registry["registry"]
+    labels = {"source": "demo", "stage": "ingest"}
+    assert _run_count(registry, labels, "success") == 1
+    assert _run_count(registry, labels, "failure") == 0
+    assert registry.get_sample_value("records_written_total", labels) == 2
+
+
+def test_run_counts_a_failed_run(
+    captured_registry: dict[str, CollectorRegistry],
+) -> None:
+    class _BoomSource:
+        name = "boom"
+
+        def fetch(self, ctx: RunContext) -> Iterable[Record]:
+            raise RuntimeError("nope")
+
+    assert WorkerApp(_BoomSource(), _ListSink()).run() == 1
+    registry = captured_registry["registry"]
+    labels = {"source": "boom", "stage": "ingest"}
+    assert _run_count(registry, labels, "failure") == 1
+    assert _run_count(registry, labels, "success") == 0

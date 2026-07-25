@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from data_pipeline_core import raw_landing_sink, raw_landing_source
@@ -11,8 +12,13 @@ def test_roundtrip_through_raw_bucket(tmp_path: Path) -> None:
     bucket = tmp_path.as_uri()
     sink = raw_landing_sink("odds-raw", bucket_url=bucket)
 
-    result = sink.write([{"id": 1, "x": "a"}, {"id": 2, "x": "b"}])
+    records = [{"id": 1, "x": "a"}, {"id": 2, "x": "b"}]
+    result = sink.write(records)
     assert result.row_count == 2
+    # bytes reported = the JSONL payload actually written (one line per record).
+    assert result.byte_count == sum(
+        len((json.dumps(r) + "\n").encode()) for r in records
+    )
 
     source = raw_landing_source("odds-raw", bucket_url=bucket)
     records = list(source.fetch(None))  # type: ignore[arg-type]

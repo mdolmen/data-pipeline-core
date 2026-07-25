@@ -45,3 +45,37 @@ def test_http_status_total_series_name_and_labels() -> None:
         "http_status_total", {"source": "demo", "stage": "ingest", "code": "429"}
     )
     assert value == 1
+
+
+def _runs(
+    registry: CollectorRegistry, source: str, stage: str, status: str
+) -> float | None:
+    return registry.get_sample_value(
+        "worker_runs_total", {"source": source, "stage": stage, "status": status}
+    )
+
+
+def test_run_and_write_counters_start_at_zero() -> None:
+    registry = CollectorRegistry()
+    StandardMetrics(registry, source="demo", stage="ingest")
+
+    labels = {"source": "demo", "stage": "ingest"}
+    assert _runs(registry, "demo", "ingest", "success") == 0
+    assert _runs(registry, "demo", "ingest", "failure") == 0
+    assert registry.get_sample_value("records_written_total", labels) == 0
+    assert registry.get_sample_value("bytes_written_total", labels) == 0
+
+
+def test_run_and_write_counters_increment() -> None:
+    registry = CollectorRegistry()
+    metrics = StandardMetrics(registry, source="demo", stage="ingest")
+    labels = {"source": "demo", "stage": "ingest"}
+
+    metrics.observe_run_finished(success=True)
+    metrics.observe_records_written(3)
+    metrics.observe_bytes_written(128)
+
+    assert _runs(registry, "demo", "ingest", "success") == 1
+    assert _runs(registry, "demo", "ingest", "failure") == 0
+    assert registry.get_sample_value("records_written_total", labels) == 3
+    assert registry.get_sample_value("bytes_written_total", labels) == 128

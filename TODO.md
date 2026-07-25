@@ -80,6 +80,12 @@ through the SDK. No resilience, minimal obs — just the spine.
 - [x] `obs/metrics.py` — standard series with stable labels:
       `worker_up`, `request_rate`, `http_status_total{code}`,
       `ingestion_lag_seconds`, `circuit_breaker_state{source}`, `proxy_usage_ratio`
+- [x] `obs/metrics.py` — technical-dashboard series (runs/errors/storage):
+      `worker_runs_total{status}` (runs & errors), `records_written_total`,
+      `bytes_written_total` (throughput & storage footprint). `WriteResult` grows an
+      optional `byte_count` (raw-landing reports it; dlt reports rows only).
+      `WorkerApp.run()` emits all three. _The dashboard over these lives in
+      `data-pipeline-infra` (Phase 7) — SDK owns the series, infra owns the render._
 - [x] `obs/gmp_push.py` — push at end of run via remote-write/OTLP, PushGateway
       fallback (workers are short-lived → push, not scrape)
       _(PushGateway transport built; GMP remote-write/OTLP deferred to a real GCP
@@ -227,3 +233,6 @@ what is **deferred** (generalize on the 2nd real usage). Maintain in
 | scheduling hint (`next_run_seconds`) | SDK, deferred (infra v2) | narrow-waist business→infra contract; worker emits one clamped scalar, infra (Cloud Tasks) self-paces, consumer computes the value |
 | browser-TLS impersonation (`curl_cffi`) | SDK, as config (`impersonate`) | generic anti-bot mechanism (JA3/JA4), like the proxy; profile value is consumer config |
 | console sink for dev confirmation | stays in betting | trivial project helper; promote only on a 2nd real usage |
+| technical-obs series (runs/errors/storage) | SDK | the worker is the only thing that knows it ran/errored/wrote N; part of the frozen surface, shared by all consumers |
+| technical dashboard (Grafana JSON) | infra, not SDK | generic over the frozen series but deployed by infra's Grafana provider; SDK = what's measured, infra = where it's shown |
+| `WriteResult.byte_count` | SDK, optional | sinks that can report volume cheaply do (raw landing); others leave `None` → `bytes_written_total` stays flat, no forced cost on every sink |

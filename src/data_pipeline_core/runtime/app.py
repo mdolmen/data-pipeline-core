@@ -113,8 +113,12 @@ class WorkerApp:
             else:
                 metrics.set_worker_up(True)
                 metrics.set_ingestion_lag(0)
+                metrics.observe_records_written(result.row_count)
+                if result.byte_count is not None:
+                    metrics.observe_bytes_written(result.byte_count)
                 log.info("worker finished", row_count=result.row_count)
             finally:
+                metrics.observe_run_finished(success=exit_code == 0)
                 elapsed = time.monotonic() - started
                 requests = http.request_count
                 metrics.set_request_rate(requests / elapsed if elapsed > 0 else 0.0)

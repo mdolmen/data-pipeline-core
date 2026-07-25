@@ -10,6 +10,18 @@ is cut.
 
 ### Added
 
+- **Technical-observability series (runs, errors, storage).** `StandardMetrics`
+  gains three counters on the frozen surface: `worker_runs_total{status}` (one
+  increment per completed run, `success`/`failure` — `sum` answers "how many
+  ran", `status="failure"` answers "how many errored"), and
+  `records_written_total` / `bytes_written_total` (volume written per run —
+  throughput and the storage footprint accrued per day/week/month). `WriteResult`
+  gains an optional `byte_count`; `raw_landing_sink` reports its JSONL bytes, the
+  dlt sink reports rows only (bytes read 0). `WorkerApp.run()` emits all three
+  automatically. These feed the **technical dashboard**, which is a Grafana
+  dashboard-as-JSON owned by `data-pipeline-infra` (SDK owns the series; infra
+  owns the backend + dashboard that renders them). Additive only — no existing
+  series renamed or relabelled.
 - **Read-until-predicate with instant abort (`HttpClient.read_until`).** Streams
   a request and returns the body the moment a caller predicate (`until(buffer)`)
   is satisfied, under the same breaker / IP-guard / proxy guards as `request` (no

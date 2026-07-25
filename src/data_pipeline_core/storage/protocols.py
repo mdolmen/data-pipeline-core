@@ -20,9 +20,15 @@ Record = dict[str, Any]
 
 @dataclass(frozen=True, slots=True)
 class WriteResult:
-    """Outcome of a ``Sink.write`` call."""
+    """Outcome of a ``Sink.write`` call.
+
+    ``byte_count`` is the volume written when the sink can report it cheaply
+    (e.g. raw landing sums its JSONL payload); sinks that can't leave it ``None``
+    and the ``bytes_written_total`` metric stays flat for that run.
+    """
 
     row_count: int
+    byte_count: int | None = None
 
 
 @runtime_checkable

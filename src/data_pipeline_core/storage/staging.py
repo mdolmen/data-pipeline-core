@@ -50,11 +50,14 @@ class _RawLandingSink:
         path = f"{directory}/{stamp}-{uuid.uuid4().hex}.jsonl"
 
         row_count = 0
+        byte_count = 0
         with fs.open(path, "w") as handle:
             for record in records:
-                handle.write(json.dumps(record) + "\n")
+                line = json.dumps(record) + "\n"
+                handle.write(line)
                 row_count += 1
-        return WriteResult(row_count=row_count)
+                byte_count += len(line.encode("utf-8"))
+        return WriteResult(row_count=row_count, byte_count=byte_count)
 
 
 class _RawLandingSource:

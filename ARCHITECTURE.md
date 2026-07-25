@@ -248,10 +248,18 @@ Standard series (stable names + labels, so dashboards are shared):
 | Series | Meaning |
 |---|---|
 | `worker_up` / heartbeat | liveness per worker and per source |
+| `worker_runs_total{status}` | completed runs by outcome; `sum` = runs, `status="failure"` = errors — aggregatable per day/week/month |
+| `records_written_total`, `bytes_written_total` | volume written to the sink (throughput + storage footprint accrued over time) |
 | `request_rate`, `http_status_total{code}` | throughput and 429 counts |
 | `ingestion_lag_seconds` | time since last successful tick per source |
 | `circuit_breaker_state{source}` | 0 = closed, 1 = open |
 | `proxy_usage_ratio` | share of requests routed via proxy |
+
+The **technical dashboard** over these series (runs, in-flight, errors, storage,
+per day/week/month) is a Grafana dashboard-as-JSON owned by `data-pipeline-infra`
+(alongside the GMP/Grafana provisioning that deploys it); the SDK owns only the
+series. `bytes_written_total` is populated when a sink can report volume cheaply
+(raw landing); the dlt sink reports rows only, so its bytes read 0.
 
 ---
 

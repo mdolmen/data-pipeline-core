@@ -59,6 +59,29 @@ class StandardMetrics:
             labels,
             registry=registry,
         )
+        # Counter base name "worker_runs" → exposed series "worker_runs_total".
+        # One increment per completed run, split by terminal status; summed over a
+        # window this answers "how many ran" and (status=failure) "how many errored".
+        self._runs = Counter(
+            "worker_runs",
+            "Completed worker runs by terminal status.",
+            [*labels, "status"],
+            registry=registry,
+        )
+        # Volume written to the sink this run — throughput and the storage footprint
+        # accumulated per day/week/month. Base names → "*_total" series.
+        self._records_written = Counter(
+            "records_written",
+            "Records written to the sink over the run.",
+            labels,
+            registry=registry,
+        )
+        self._bytes_written = Counter(
+            "bytes_written",
+            "Bytes written to the sink over the run (0 when the sink can't report it).",
+            labels,
+            registry=registry,
+        )
 
         # Initialise the gauges so the series export at 0 before their mechanism
         # populates them (the counter appears once a status is first seen).
@@ -70,6 +93,12 @@ class StandardMetrics:
             self._proxy_ratio,
         ):
             gauge.labels(**self._base).set(0)
+        # Materialise the counter children at 0 too, so the series exist from the
+        # first run (both run outcomes, and the write totals).
+        self._runs.labels(**self._base, status="success")
+        self._runs.labels(**self._base, status="failure")
+        self._records_written.labels(**self._base)
+        self._bytes_written.labels(**self._base)
 
     def set_worker_up(self, up: bool) -> None:
         self._worker_up.labels(**self._base).set(1 if up else 0)
@@ -88,3 +117,13 @@ class StandardMetrics:
 
     def observe_http_status(self, code: int) -> None:
         self._http_status.labels(**self._base, code=str(code)).inc()
+
+    def observe_run_finished(self, *, success: bool) -> None:
+        status = "success" if success else "failure"
+        self._runs.labels(**self._base, status=status).inc()
+
+    def observe_records_written(self, count: int) -> None:
+        self._records_written.labels(**self._base).inc(count)
+
+    def observe_bytes_written(self, count: int) -> None:
+        self._bytes_written.labels(**self._base).inc(count)
