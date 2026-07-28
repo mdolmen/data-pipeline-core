@@ -110,4 +110,16 @@ def otlp_push_metrics(
     except Exception:
         logger.exception("metrics otlp push failed", url=url)
     else:
-        logger.info("metrics otlp pushed", url=url, job=job)
+        # A 200 can still carry an OTLP partialSuccess: the gateway accepted the
+        # request but dropped some/all data points. Surface that instead of
+        # reporting a clean push, so silent rejections are visible.
+        body = response.text
+        if "rejected" in body.lower():
+            logger.warning(
+                "metrics otlp partially rejected",
+                url=url,
+                job=job,
+                response=body[:1000],
+            )
+        else:
+            logger.info("metrics otlp pushed", url=url, job=job)
