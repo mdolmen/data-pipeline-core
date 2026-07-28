@@ -10,16 +10,19 @@ is cut.
 
 ### Added
 
-- **Prometheus remote-write push (`obs/remote_write.py`).** The preferred
-  end-of-run metrics path for short-lived jobs: the worker writes its final series
-  straight to a TSDB (e.g. Grafana Cloud) at exit — no PushGateway + scraper
-  middle-boxes. `WorkerApp.run()` uses it when `metrics_remote_write_url` is set
-  (with `metrics_remote_write_username` / `metrics_remote_write_password` for HTTP
-  basic-auth), else falls back to the PushGateway path. Zero new dependencies: the
-  Protobuf `WriteRequest` is hand-encoded and Snappy is emitted as a single
-  literal block (spec-compliant, ~KB payloads so the skipped compression is free).
+- **OTLP/HTTP metrics push (`obs/otlp_push.py`).** The preferred end-of-run metrics
+  path for short-lived jobs: the worker writes its final series straight to an OTLP
+  backend (Grafana Cloud's OTLP gateway) at exit — no PushGateway + scraper
+  middle-boxes. `WorkerApp.run()` uses it when `metrics_otlp_url` is set (with
+  `metrics_otlp_username` / `metrics_otlp_password` for HTTP basic-auth), else falls
+  back to the PushGateway path. OTLP/HTTP-JSON needs no protobuf or compression —
+  just an `httpx` POST of the `ExportMetricsServiceRequest` built from the registry;
+  metric names are sent exactly as Prometheus exposes them (no OTLP `unit`), so the
+  OTLP→Prometheus translation keeps `worker_runs_total` / `worker_up` / … unchanged.
   A push never raises — observability must not break ingestion. The token is read
-  from env/Secret Manager, never hard-coded.
+  from env/Secret Manager, never hard-coded. _(Supersedes the short-lived
+  Prometheus remote-write emitter: the chosen backend, Grafana Cloud, ingests via
+  OTLP; remote-write lives in git history if a Prometheus-native target reappears.)_
 - **Technical-observability series (runs, errors, storage).** `StandardMetrics`
   gains three counters on the frozen surface: `worker_runs_total{status}` (one
   increment per completed run, `success`/`failure` — `sum` answers "how many
