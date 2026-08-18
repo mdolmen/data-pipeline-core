@@ -8,12 +8,12 @@ see ``ingestion/ip_guard.py``).
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import redis
 
-from data_pipeline_core.storage.protocols import Record, Sink, WriteResult
+from data_pipeline_core.storage.protocols import Sink, WriteResult
 
 
 def make_redis(url: str) -> redis.Redis:
@@ -28,7 +28,7 @@ class RedisCache:
         self._redis = client
         self._ttl = ttl_seconds
 
-    def set_snapshot(self, key: str, value: dict[str, Any]) -> None:
+    def set_snapshot(self, key: str, value: Mapping[str, object]) -> None:
         self._redis.set(f"snapshot:{key}", json.dumps(value), ex=self._ttl)
 
     def get_snapshot(self, key: str) -> dict[str, Any] | None:
@@ -44,7 +44,7 @@ class _RedisLatestSink:
         self._key_fields = tuple(key_fields)
         self._cache = cache
 
-    def write(self, records: Iterable[Record]) -> WriteResult:
+    def write(self, records: Iterable[Mapping[str, object]]) -> WriteResult:
         row_count = 0
         for record in records:
             key = ":".join(str(record[field]) for field in self._key_fields)
@@ -58,7 +58,7 @@ def redis_latest_sink(
     client: redis.Redis,
     *,
     ttl_seconds: int = 3600,
-) -> Sink[Record]:
+) -> Sink[Mapping[str, object]]:
     """A ``Sink`` upserting each record as the latest snapshot for its key.
 
     Idempotent by construction: re-running overwrites the same keys. The optional

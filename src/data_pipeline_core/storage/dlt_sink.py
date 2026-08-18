@@ -12,13 +12,13 @@ automatically (ACID merge on plain objects, no database service).
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import dlt
 
-from data_pipeline_core.storage.protocols import Record, Sink, WriteResult
+from data_pipeline_core.storage.protocols import Sink, WriteResult
 
 
 @dataclass
@@ -29,10 +29,10 @@ class _DltSink:
     primary_key: str | tuple[str, ...] | None = None
     table_format: str | None = None
 
-    def write(self, records: Iterable[Record]) -> WriteResult:
+    def write(self, records: Iterable[Mapping[str, object]]) -> WriteResult:
         row_count = 0
 
-        def _counting() -> Iterator[Record]:
+        def _counting() -> Iterator[Mapping[str, object]]:
             nonlocal row_count
             for record in records:
                 row_count += 1
@@ -67,7 +67,7 @@ def dlt_sink(
     table_name: str = "records",
     primary_key: str | tuple[str, ...] | None = None,
     table_format: str | None = None,
-) -> Sink[Record]:
+) -> Sink[Mapping[str, object]]:
     """A ``Sink`` that loads records via dlt; ``primary_key`` → idempotent merge."""
     return _DltSink(
         dataset=dataset,

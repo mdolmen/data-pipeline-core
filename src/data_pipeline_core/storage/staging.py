@@ -16,13 +16,17 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from fsspec.core import url_to_fs
 
-from data_pipeline_core.storage.protocols import Record, Sink, Source, WriteResult
+from data_pipeline_core.storage.protocols import Sink, Source, WriteResult
+
+# What a replay yields is whatever the ingest worker landed — the project knows
+# that shape, the SDK doesn't. Inferred from the wiring at the call site.
+RecordT = TypeVar("RecordT", bound=Mapping[str, object])
 
 if TYPE_CHECKING:
     from data_pipeline_core.runtime.context import RunContext
@@ -42,7 +46,7 @@ class _RawLandingSink:
         self._channel = channel
         self._bucket_url = bucket_url
 
-    def write(self, records: Iterable[Record]) -> WriteResult:
+    def write(self, records: Iterable[Mapping[str, object]]) -> WriteResult:
         fs, base = url_to_fs(_resolve_bucket(self._bucket_url))
         directory = f"{base.rstrip('/')}/{self._channel}"
         fs.makedirs(directory, exist_ok=True)
@@ -60,13 +64,13 @@ class _RawLandingSink:
         return WriteResult(row_count=row_count, byte_count=byte_count)
 
 
-class _RawLandingSource:
+class _RawLandingSource(Generic[RecordT]):
     def __init__(self, channel: str, bucket_url: str | None) -> None:
         self.name = f"raw-{channel}"
         self._channel = channel
         self._bucket_url = bucket_url
 
-    def fetch(self, ctx: RunContext) -> Iterable[Record]:
+    def fetch(self, ctx: RunContext) -> Iterable[RecordT]:
         fs, base = url_to_fs(_resolve_bucket(self._bucket_url))
         pattern = f"{base.rstrip('/')}/{self._channel}/*.jsonl"
         for path in sorted(fs.glob(pattern)):
@@ -74,17 +78,19 @@ class _RawLandingSource:
                 for line in handle:
                     text = line.decode() if isinstance(line, bytes) else line
                     if text.strip():
-                        record: dict[str, Any] = json.loads(text)
+                        record: RecordT = json.loads(text)
                         yield record
 
 
-def raw_landing_sink(channel: str, *, bucket_url: str | None = None) -> Sink[Record]:
+def raw_landing_sink(
+    channel: str, *, bucket_url: str | None = None
+) -> Sink[Mapping[str, object]]:
     """A ``Sink`` that lands raw records as JSONL under ``{bucket}/{channel}/``."""
     return _RawLandingSink(channel, bucket_url)
 
 
 def raw_landing_source(
     channel: str, *, bucket_url: str | None = None
-) -> Source[Record]:
+) -> Source[RecordT]:
     """A ``Source`` that replays raw records from ``{bucket}/{channel}/``."""
     return _RawLandingSource(channel, bucket_url)
