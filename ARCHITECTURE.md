@@ -203,7 +203,23 @@ WorkerApp(source=LegifranceSource(), transform=LawParser(),
           sink=dlt_sink(dataset="laws", destination="filesystem")).run()
 ```
 
----
+### Record representation is a volume-dependent choice
+
+`Record = dict[str, Any]` is deliberately a mapping, and the refinement path is
+`TypedDict` (project-owned schemas, `Mapping[str, object]`-bound TypeVars on the
+protocol slots) rather than dataclasses. Every record crosses a serialization
+boundary — `raw_landing_sink` writes JSONL, `dlt_sink` hands the mapping to dlt's
+schema inference — so a dataclass would cost an `asdict()` at each hop and buy
+nothing the load layer wants. A `TypedDict` is also a pure annotation change: no
+call site moves.
+
+That argument is about serialization, and it holds at current volume. It stops
+holding on memory: per-record `dict` overhead is the wrong shape somewhere around
+10⁵–10⁶ records per snapshot, where a `slots=True` dataclass or a columnar
+representation for the transform stage wins instead. The two arguments pull
+opposite ways, and the crossover is a measurement, not a principle — don't switch
+without a benchmark. Revisit when market breadth lands that volume; until then the
+mapping is correct and the alternative is premature.
 
 ## 7. Runtime model
 
