@@ -8,6 +8,28 @@ is cut.
 
 ## [Unreleased] — `0.1.0-dev`
 
+### Changed
+
+- **`Source`, `Transform` and `Sink` are generic** (`storage/protocols.py`):
+  `Source[T]`, `Transform[TIn, TOut]`, `Sink[T]`, over a `TypeVar` bound to
+  `Mapping[str, object]`. A consuming project can now pin its own record schema —
+  a `TypedDict` — and have the type checker verify every construction site, which
+  `Record = dict[str, Any]` made impossible: a `TypedDict` is not assignable to a
+  mutable `dict`, so a typed source could not satisfy the old contract at all.
+  The bound is `Mapping`, not `dict`, for that reason; variance follows position
+  (`_out` covariant for produced records, `_in` contravariant for consumed ones)
+  and mypy rejects the protocol if it doesn't. `Record` stays as the default for
+  consumers that don't parameterise, and the SDK's own sinks/sources are
+  `Sink[Record]` / `Source[Record]`, so nothing existing breaks.
+- **`WorkerApp` is generic** (`runtime/app.py`): `WorkerApp[T, U]` over the
+  `Source[T] → Transform[T, U] → Sink[U]` chain, so a wiring mistake is a type
+  error at construction rather than a schema surprise in the warehouse. Two
+  `__init__` overloads carry the two legal shapes: with a transform the sink
+  consumes what the transform produces; without one, `U` collapses to `T` (via a
+  `self: WorkerApp[T, T]` annotation) and the sink must consume exactly what the
+  source yields — a relationship a default argument cannot express, hence the
+  overloads. Call sites are unchanged; only the annotations are new.
+
 ### Added
 
 - **OTLP/HTTP metrics push (`obs/otlp_push.py`).** The preferred end-of-run metrics

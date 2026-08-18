@@ -58,7 +58,7 @@ def redis_latest_sink(
     client: redis.Redis,
     *,
     ttl_seconds: int = 3600,
-) -> Sink:
+) -> Sink[Record]:
     """A ``Sink`` upserting each record as the latest snapshot for its key.
 
     Idempotent by construction: re-running overwrites the same keys. The optional

@@ -78,11 +78,13 @@ class _RawLandingSource:
                         yield record
 
 
-def raw_landing_sink(channel: str, *, bucket_url: str | None = None) -> Sink:
+def raw_landing_sink(channel: str, *, bucket_url: str | None = None) -> Sink[Record]:
     """A ``Sink`` that lands raw records as JSONL under ``{bucket}/{channel}/``."""
     return _RawLandingSink(channel, bucket_url)
 
 
-def raw_landing_source(channel: str, *, bucket_url: str | None = None) -> Source:
+def raw_landing_source(
+    channel: str, *, bucket_url: str | None = None
+) -> Source[Record]:
     """A ``Source`` that replays raw records from ``{bucket}/{channel}/``."""
     return _RawLandingSource(channel, bucket_url)

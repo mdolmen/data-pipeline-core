@@ -67,7 +67,7 @@ def dlt_sink(
     table_name: str = "records",
     primary_key: str | tuple[str, ...] | None = None,
     table_format: str | None = None,
-) -> Sink:
+) -> Sink[Record]:
     """A ``Sink`` that loads records via dlt; ``primary_key`` → idempotent merge."""
     return _DltSink(
         dataset=dataset,

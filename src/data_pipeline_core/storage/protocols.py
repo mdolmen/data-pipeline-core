@@ -8,14 +8,23 @@ them. Changing any of these is a SemVer-major event — keep it small and stable
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from data_pipeline_core.runtime.context import RunContext
 
 Record = dict[str, Any]
+
+# The record type each slot moves. Bound to ``Mapping``, not ``dict``: a
+# ``TypedDict`` (the way a project pins its own schema) is assignable to a
+# read-only mapping but not to a mutable ``dict``, which could be mutated out of
+# shape. Variance follows position — a source only ever *returns* records, a sink
+# only ever *accepts* them — and mypy rejects the protocol outright if it doesn't.
+# ``_out`` is covariant (produced), ``_in`` contravariant (consumed).
+RecordT_out = TypeVar("RecordT_out", bound=Mapping[str, object], covariant=True)
+RecordT_in = TypeVar("RecordT_in", bound=Mapping[str, object], contravariant=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,16 +41,16 @@ class WriteResult:
 
 
 @runtime_checkable
-class Source(Protocol):
+class Source(Protocol[RecordT_out]):
     """Implemented per project: THE ingestion business logic."""
 
     name: str
 
-    def fetch(self, ctx: RunContext) -> Iterable[Record]: ...
+    def fetch(self, ctx: RunContext) -> Iterable[RecordT_out]: ...
 
 
 @runtime_checkable
-class Transform(Protocol):
+class Transform(Protocol[RecordT_in, RecordT_out]):
     """Optional, per project: parsing / normalization of raw records.
 
     One record in, zero or more out (normalize, explode, drop). Wired into a
@@ -49,11 +58,13 @@ class Transform(Protocol):
     worker reading from the raw-landing staging boundary.
     """
 
-    def transform(self, record: Record, ctx: RunContext) -> Iterable[Record]: ...
+    def transform(
+        self, record: RecordT_in, ctx: RunContext
+    ) -> Iterable[RecordT_out]: ...
 
 
 @runtime_checkable
-class Sink(Protocol):
+class Sink(Protocol[RecordT_in]):
     """Receives the records a run produced and persists them."""
 
-    def write(self, records: Iterable[Record]) -> WriteResult: ...
+    def write(self, records: Iterable[RecordT_in]) -> WriteResult: ...

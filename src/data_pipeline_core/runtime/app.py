@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
+from typing import Any, Generic, TypeVar, overload
 
 from prometheus_client import CollectorRegistry
 
@@ -26,19 +27,45 @@ from data_pipeline_core.runtime.config import Settings
 from data_pipeline_core.runtime.context import RunContext
 from data_pipeline_core.runtime.lifecycle import Lifecycle, handle_shutdown
 from data_pipeline_core.runtime.logging import configure_logging, get_logger
-from data_pipeline_core.storage.protocols import Record, Sink, Source, Transform
+from data_pipeline_core.storage.protocols import Sink, Source, Transform
 from data_pipeline_core.storage.redis_cache import make_redis
 
+# The record types the worker moves: ``RecordT`` out of the source, ``RecordU``
+# into the sink. Invariant — the app both accepts and produces each — and equal
+# to each other when no transform is wired (see the ``__init__`` overloads).
+RecordT = TypeVar("RecordT", bound=Mapping[str, object])
+RecordU = TypeVar("RecordU", bound=Mapping[str, object])
 
-class WorkerApp:
+
+class WorkerApp(Generic[RecordT, RecordU]):
     """Wraps a ``Source``, optional ``Transform`` and ``Sink`` into a worker."""
+
+    @overload
+    def __init__(
+        self: WorkerApp[RecordT, RecordT],
+        source: Source[RecordT],
+        sink: Sink[RecordT],
+        *,
+        transform: None = None,
+        settings: Settings | None = None,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        source: Source[RecordT],
+        sink: Sink[RecordU],
+        *,
+        transform: Transform[RecordT, RecordU],
+        settings: Settings | None = None,
+    ) -> None: ...
 
     def __init__(
         self,
-        source: Source,
-        sink: Sink,
+        source: Source[RecordT],
+        sink: Sink[Any],
         *,
-        transform: Transform | None = None,
+        transform: Transform[RecordT, RecordU] | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._source = source
@@ -103,7 +130,10 @@ class WorkerApp:
             log.info("worker starting")
             exit_code = 0
             try:
-                records = self._source.fetch(ctx)
+                # ``Iterable[Any]`` here only because the two wirings share one
+                # variable; the chain itself is checked at construction by the
+                # ``__init__`` overloads.
+                records: Iterable[Any] = self._source.fetch(ctx)
                 if self._transform is not None:
                     records = self._apply_transform(records, ctx)
                 result = self._sink.write(records)
@@ -149,8 +179,8 @@ class WorkerApp:
             return exit_code
 
     def _apply_transform(
-        self, records: Iterable[Record], ctx: RunContext
-    ) -> Iterator[Record]:
+        self, records: Iterable[RecordT], ctx: RunContext
+    ) -> Iterator[RecordU]:
         assert self._transform is not None
         for record in records:
             yield from self._transform.transform(record, ctx)
