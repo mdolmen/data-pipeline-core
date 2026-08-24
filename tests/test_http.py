@@ -38,8 +38,8 @@ def _client(
     return client, breaker, registry
 
 
-def _aggressive_guard() -> IpGuard:
-    redis_client = fakeredis.FakeStrictRedis()
+def _aggressive_guard(redis_client: fakeredis.FakeStrictRedis | None = None) -> IpGuard:
+    redis_client = redis_client or fakeredis.FakeStrictRedis()
     redis_client.set("ratelimit:s:0", 500)  # already at the Aggressive threshold
     return IpGuard(
         "s",
@@ -128,6 +128,34 @@ def test_aggressive_mode_routes_via_proxy(httpx_mock: HTTPXMock) -> None:
 
     assert client.request_count == 1
     assert client.proxied_count == 1  # density ≥500 → routed through the proxy
+    proxy.close()
+
+
+def test_counts_guard_and_proxy_per_attempt_not_per_call(
+    httpx_mock: HTTPXMock,
+) -> None:
+    # Three attempts are three packets from the same IP: the guard's density
+    # counter and proxied_count must each read 3. Counted per call instead, a
+    # retrying worker spends its rate budget unseen and proxy_usage_ratio reads
+    # 1/3 of the share actually proxied.
+    httpx_mock.add_response(status_code=503)
+    httpx_mock.add_response(status_code=503)
+    httpx_mock.add_response(status_code=200)
+    redis_client = fakeredis.FakeStrictRedis()
+    proxy = ProxyRouter(
+        proxy_url="http://proxy:8000", enabled=True, timeout_seconds=30.0
+    )
+    client, _, _ = _client(
+        ip_guard=_aggressive_guard(redis_client), proxy=proxy, http_max_retries=2
+    )
+    before = int(redis_client.get("ratelimit:s:0") or 0)
+
+    response = client.get("https://api.test/odds")
+
+    assert response.status_code == 200
+    assert client.request_count == 3
+    assert client.proxied_count == 3
+    assert int(redis_client.get("ratelimit:s:0") or 0) == before + 3
     proxy.close()
 
 

@@ -85,22 +85,10 @@ class HttpClient:
         if self._user_agents and not self._settings.impersonate:
             headers.setdefault("User-Agent", self._rng.choice(self._user_agents))
 
-        mode = self._ip_guard.evaluate() if self._ip_guard is not None else Mode.SAFE
-        if mode in (Mode.WARNING, Mode.AGGRESSIVE):
-            self._sleep(self._rng.uniform(0, self._settings.warning_jitter_seconds))
-
-        client = self._client
-        use_proxy = False
-        if self._proxy is not None and self._proxy.should_use(mode, force=force_proxy):
-            proxied = self._proxy.client
-            if proxied is not None:
-                client, use_proxy = proxied, True
-        if use_proxy:
-            self.proxied_count += 1
-
         attempts = max(1, self._settings.http_max_retries + 1)
         transport_error: httpx.TransportError | None = None
         for attempt in range(attempts):
+            client, use_proxy = self._begin_attempt(force_proxy=force_proxy)
             try:
                 response = client.request(method, url, headers=headers, **kwargs)
             except httpx.TransportError as exc:
@@ -166,18 +154,7 @@ class HttpClient:
         if self._user_agents and not self._settings.impersonate:
             headers.setdefault("User-Agent", self._rng.choice(self._user_agents))
 
-        mode = self._ip_guard.evaluate() if self._ip_guard is not None else Mode.SAFE
-        if mode in (Mode.WARNING, Mode.AGGRESSIVE):
-            self._sleep(self._rng.uniform(0, self._settings.warning_jitter_seconds))
-
-        client = self._client
-        use_proxy = False
-        if self._proxy is not None and self._proxy.should_use(mode, force=force_proxy):
-            proxied = self._proxy.client
-            if proxied is not None:
-                client, use_proxy = proxied, True
-        if use_proxy:
-            self.proxied_count += 1
+        client, use_proxy = self._begin_attempt(force_proxy=force_proxy)
 
         self.request_count += 1
         if self._log is not None:
@@ -219,6 +196,30 @@ class HttpClient:
                 if until(bytes(buffer)):
                     break
             return response.status_code, bytes(buffer)
+
+    def _begin_attempt(self, *, force_proxy: bool) -> tuple[Client, bool]:
+        """Consume one IP-guard token and pick the client for a single attempt.
+
+        Called once per attempt, not once per call: a retried request is several
+        packets from the same IP, so collapsing them onto the call would let a
+        retrying worker spend its density budget unseen — and would report a
+        ``proxy_usage_ratio`` well under the share actually proxied. Re-evaluating
+        per attempt also lets the mode escalate mid-retry, which is what a rising
+        request density should do.
+        """
+        mode = self._ip_guard.evaluate() if self._ip_guard is not None else Mode.SAFE
+        if mode in (Mode.WARNING, Mode.AGGRESSIVE):
+            self._sleep(self._rng.uniform(0, self._settings.warning_jitter_seconds))
+
+        client = self._client
+        use_proxy = False
+        if self._proxy is not None and self._proxy.should_use(mode, force=force_proxy):
+            proxied = self._proxy.client
+            if proxied is not None:
+                client, use_proxy = proxied, True
+        if use_proxy:
+            self.proxied_count += 1
+        return client, use_proxy
 
     def close(self) -> None:
         self._client.close()
