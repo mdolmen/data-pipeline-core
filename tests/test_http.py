@@ -145,6 +145,17 @@ def test_proxy_disabled_by_config_keeps_direct(httpx_mock: HTTPXMock) -> None:
     assert client.proxied_count == 0  # never routed through the proxy
 
 
+def test_response_exposes_is_success(httpx_mock: HTTPXMock) -> None:
+    # `get` is declared to return the public `Response` protocol, so this is the
+    # surface a consumer's `mypy --strict` sees — not the concrete backend
+    # response the union happens to carry. Reading it here fails the type check
+    # if the protocol stops declaring what the SDK's own run loop already uses.
+    httpx_mock.add_response(status_code=200)
+    client, _, _ = _client()
+
+    assert client.get("https://api.test/odds").is_success
+
+
 def test_read_until_returns_body_and_records_status(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(content=b"chunk-one-two-three")
     client, _, registry = _client()
