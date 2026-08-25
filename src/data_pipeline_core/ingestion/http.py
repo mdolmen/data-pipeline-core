@@ -93,6 +93,11 @@ class HttpClient:
                 response = client.request(method, url, headers=headers, **kwargs)
             except httpx.TransportError as exc:
                 transport_error = exc
+                # An attempt that never reached a response is still a packet we
+                # sent: counting it keeps request_rate honest and stops
+                # proxied_count outrunning it (proxy_usage_ratio is their quotient).
+                self.request_count += 1
+                self._record_transport_error()
                 if self._log is not None:
                     self._log.warning(
                         "http request failed",
@@ -160,18 +165,24 @@ class HttpClient:
         if self._log is not None:
             self._log.info("http read_until", method=method, url=url, proxied=use_proxy)
 
-        if isinstance(client, _CurlClient):
-            status, body = client.read_until(
-                method,
-                url,
-                until=until,
-                headers=headers,
-                content=kwargs.get("content"),
-            )
-        else:
-            status, body = self._httpx_read_until(
-                client, method, url, headers, kwargs.get("content"), until
-            )
+        try:
+            if isinstance(client, _CurlClient):
+                status, body = client.read_until(
+                    method,
+                    url,
+                    until=until,
+                    headers=headers,
+                    content=kwargs.get("content"),
+                )
+            else:
+                status, body = self._httpx_read_until(
+                    client, method, url, headers, kwargs.get("content"), until
+                )
+        except httpx.TransportError:
+            # Already counted in request_count above; record it so a stream that
+            # never connects shows up on the same series as a failed request.
+            self._record_transport_error()
+            raise
 
         self._record_status(status)
         if status == 429:
@@ -232,3 +243,7 @@ class HttpClient:
     def _record_status(self, code: int) -> None:
         if self._metrics is not None:
             self._metrics.observe_http_status(code)
+
+    def _record_transport_error(self) -> None:
+        if self._metrics is not None:
+            self._metrics.observe_transport_error()

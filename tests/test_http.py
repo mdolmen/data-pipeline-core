@@ -117,6 +117,46 @@ def test_retries_transport_error_then_raises(httpx_mock: HTTPXMock) -> None:
         client.get("https://api.test/odds")
 
 
+def test_transport_errors_are_counted_and_recorded(httpx_mock: HTTPXMock) -> None:
+    # A source we can't reach at all must not read as an idle run: uncounted,
+    # request_rate is 0.0 with no http_status sample, which on the dashboard is
+    # indistinguishable from "nothing to fetch".
+    httpx_mock.add_exception(httpx.ConnectError("boom"), is_reusable=True)
+    client, _, registry = _client(http_max_retries=1)
+
+    with pytest.raises(httpx.ConnectError):
+        client.get("https://api.test/odds")
+
+    assert client.request_count == 2  # both attempts, not zero
+    assert (
+        registry.get_sample_value(
+            "http_status_total",
+            {"source": "s", "stage": "ingest", "code": "transport_error"},
+        )
+        == 2
+    )
+
+
+def test_proxy_ratio_stays_bounded_when_transport_fails(httpx_mock: HTTPXMock) -> None:
+    # proxied_count counts every attempt, so request_count must too — otherwise
+    # their quotient (proxy_usage_ratio, documented 0..1) exceeds 1.
+    httpx_mock.add_exception(httpx.ConnectError("boom"), is_reusable=True)
+    proxy = ProxyRouter(
+        proxy_url="http://proxy:8000", enabled=True, timeout_seconds=30.0
+    )
+    client, _, _ = _client(
+        ip_guard=_aggressive_guard(), proxy=proxy, http_max_retries=2
+    )
+
+    with pytest.raises(httpx.ConnectError):
+        client.get("https://api.test/odds")
+
+    assert client.request_count == 3
+    assert client.proxied_count == 3
+    assert client.proxied_count / client.request_count <= 1.0
+    proxy.close()
+
+
 def test_aggressive_mode_routes_via_proxy(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(status_code=200)
     proxy = ProxyRouter(

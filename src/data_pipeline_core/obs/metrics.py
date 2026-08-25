@@ -14,6 +14,12 @@ from __future__ import annotations
 
 from prometheus_client import CollectorRegistry, Counter, Gauge
 
+# `code` value for an attempt that never got a response (DNS, connection refused,
+# TLS handshake, timeout). A sentinel *value* on the existing series rather than a
+# series of its own, so §8's frozen surface and the dashboards over it are
+# untouched. Deliberately non-numeric: `code=~"5.."` should not match it.
+_TRANSPORT_ERROR = "transport_error"
+
 
 class StandardMetrics:
     """Holds the standard series, bound to one run's registry, source and stage."""
@@ -37,7 +43,8 @@ class StandardMetrics:
         # Counter base name "http_status" → exposed series "http_status_total".
         self._http_status = Counter(
             "http_status",
-            "Outbound HTTP responses by status code.",
+            "Outbound HTTP attempts by status code "
+            f"({_TRANSPORT_ERROR!r} when no response arrived).",
             [*labels, "code"],
             registry=registry,
         )
@@ -117,6 +124,10 @@ class StandardMetrics:
 
     def observe_http_status(self, code: int) -> None:
         self._http_status.labels(**self._base, code=str(code)).inc()
+
+    def observe_transport_error(self) -> None:
+        """Record an attempt that never produced a response."""
+        self._http_status.labels(**self._base, code=_TRANSPORT_ERROR).inc()
 
     def observe_run_finished(self, *, success: bool) -> None:
         status = "success" if success else "failure"
