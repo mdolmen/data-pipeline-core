@@ -81,15 +81,16 @@ class WorkerApp(Generic[RecordT, RecordU]):
 
         registry = CollectorRegistry()
         metrics = StandardMetrics(registry, source=source_name, stage=settings.stage)
+        run_id = uuid.uuid4().hex
+        log = get_logger().bind(run_id=run_id, source=source_name, stage=settings.stage)
+        redis_client = make_redis(settings.redis_url) if settings.redis_url else None
         breaker = CircuitBreaker(
             source_name,
             threshold=settings.circuit_breaker_threshold,
             cooldown_seconds=settings.circuit_breaker_cooldown_seconds,
             metrics=metrics,
+            client=redis_client,  # None → per-run in-memory state
         )
-        run_id = uuid.uuid4().hex
-        log = get_logger().bind(run_id=run_id, source=source_name, stage=settings.stage)
-        redis_client = make_redis(settings.redis_url) if settings.redis_url else None
         ip_guard = (
             IpGuard(
                 source_name,
