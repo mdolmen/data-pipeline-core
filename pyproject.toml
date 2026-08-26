@@ -9,7 +9,7 @@ authors = [{ name = "Mathieu Dolmen", email = "mathieu.dolmen@gmail.com" }]
 keywords = ["gcp", "data-pipeline", "ingestion", "etl", "cloud-run"]
 # Runtime dependencies are added per build phase as a real consumer
 # (proba-markets-analysis) demands them, so the SDK never carries speculative
-# weight. See TODO.md / CHANGELOG.md decision log.
+# weight. See DEVELOPMENT.md / CHANGELOG.md decision log.
 #   - dlt (Phase 1): the load layer behind dlt_sink (parquet → filesystem/GCS).
 #   - pydantic-settings, structlog (Phase 2): config and structured logging.
 #   - prometheus-client (Phase 3): standard metric series + end-of-run push.

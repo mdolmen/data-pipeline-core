@@ -1,7 +1,8 @@
 # CLAUDE.md — data-pipeline-core
 
 Reusable Python SDK for GCP ingestion pipelines. Read `ARCHITECTURE.md` for the
-design and `TODO.md` for the sequenced build plan before making changes.
+design, `TODO.md` for the sequenced build plan, and `DEVELOPMENT.md` for the
+strategy behind it before making changes.
 
 These are behavioral guidelines (derived from Karpathy's notes on LLM coding
 pitfalls), specialized to this repo. They bias toward caution over speed; use
@@ -64,7 +65,7 @@ exists.
   series (`ARCHITECTURE.md` §8) — Grafana dashboards depend on them.
 - **Decision log.** When you decide something goes in the SDK vs stays in a
   project (or is deferred), record it in `CHANGELOG.md` per the table in
-  `TODO.md`. This briefs the future Polytricks instance.
+  `DEVELOPMENT.md`. This briefs the future Polytricks instance.
 
 ## Conventions
 

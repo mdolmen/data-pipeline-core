@@ -156,7 +156,7 @@ is cut.
 
 What went **into the SDK**, what stayed **in the consuming project**, and what is
 **deferred** (generalize on the 2nd real usage). This briefs the future
-Polytricks instance — see `TODO.md`.
+Polytricks instance — see `DEVELOPMENT.md`.
 
 | Item | Decision | Rationale |
 |---|---|---|

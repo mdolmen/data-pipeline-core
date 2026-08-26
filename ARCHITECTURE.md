@@ -7,7 +7,8 @@ three things to write: the **ingestion logic** (the worker's `fetch()`), the
 **transform logic** (`transform()`, parsing/normalization — optional), and the
 **interface** that presents the stored data.
 
-> Companion docs: `TODO.md` (sequenced build plan) and
+> Companion docs: `TODO.md` (sequenced build plan), `DEVELOPMENT.md` (strategy,
+> phase goals, decision log) and
 > `~/Workspace/polytricks/data-pipeline-core.md` (origin spec, in French, incl.
 > the co-development workflow).
 
