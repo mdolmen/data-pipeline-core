@@ -42,11 +42,30 @@ class WriteResult:
 
 @runtime_checkable
 class Source(Protocol[RecordT_out]):
-    """Implemented per project: THE ingestion business logic."""
+    """Implemented per project: THE ingestion business logic.
+
+    ``name`` identifies the source and becomes the ``source`` label on every
+    metric series and log line, so keep it stable — dashboards key off it.
+    """
 
     name: str
 
-    def fetch(self, ctx: RunContext) -> Iterable[RecordT_out]: ...
+    def fetch(self, ctx: RunContext) -> Iterable[RecordT_out]:
+        """Produce this run's records. Called once per run.
+
+        Prefer a generator: the run loop hands the iterable straight to the sink
+        without materialising it, so yielding keeps memory flat regardless of
+        volume. Make outbound calls through ``ctx.http`` to inherit retry,
+        backoff, UA rotation, the circuit breaker and the IP guard — a bare
+        ``httpx`` call gets none of them and is invisible to the metrics. In a
+        long loop, check ``ctx.should_stop()`` between items and return early
+        when it is true, so a SIGTERM ends the run cleanly instead of killing it
+        mid-write.
+
+        Raising fails the run (exit code 1, ``worker_up=0``); the exception is
+        logged with a traceback by the run loop.
+        """
+        ...
 
 
 @runtime_checkable
@@ -58,13 +77,27 @@ class Transform(Protocol[RecordT_in, RecordT_out]):
     worker reading from the raw-landing staging boundary.
     """
 
-    def transform(
-        self, record: RecordT_in, ctx: RunContext
-    ) -> Iterable[RecordT_out]: ...
+    def transform(self, record: RecordT_in, ctx: RunContext) -> Iterable[RecordT_out]:
+        """Map one input record to zero or more output records.
+
+        Yield nothing to drop a record, once to normalize it, many times to
+        explode it. Applied lazily between ``fetch`` and ``write``, so the
+        streaming property of the chain is preserved.
+        """
+        ...
 
 
 @runtime_checkable
 class Sink(Protocol[RecordT_in]):
     """Receives the records a run produced and persists them."""
 
-    def write(self, records: Iterable[RecordT_in]) -> WriteResult: ...
+    def write(self, records: Iterable[RecordT_in]) -> WriteResult:
+        """Persist the run's records and report what was written.
+
+        ``records`` is a lazy iterable that can only be consumed once — iterate
+        it directly rather than taking ``len()``, and count as you go. The
+        returned ``WriteResult`` drives ``records_written_total`` and
+        ``bytes_written_total``; leave ``byte_count`` as ``None`` when volume
+        isn't cheaply known.
+        """
+        ...

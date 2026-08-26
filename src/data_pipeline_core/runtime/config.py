@@ -15,6 +15,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Runtime knobs every worker shares, read from the environment / ``.env``.
+
+    Subclass to add project fields and an env prefix, then hand an instance to
+    ``WorkerApp(..., settings=...)``::
+
+        class MySettings(Settings):
+            model_config = SettingsConfigDict(env_prefix="MYAPP_", env_file=".env")
+            catalog_url: str
+
+    Project-specific values belong in the subclass as defaults, never as
+    hard-coded constants in the SDK. Fields below default to values tuned for a
+    high-frequency consumer; override them per project rather than forking.
+    """
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     log_level: str = "INFO"
