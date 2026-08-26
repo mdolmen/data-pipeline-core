@@ -69,6 +69,14 @@ def test_none_and_empty_are_distinct_from_values() -> None:
     assert deterministic_id("a", "") != deterministic_id("a")
 
 
+def test_lone_surrogates_hash_instead_of_raising() -> None:
+    # json.loads decodes an unpaired \uD800-\uDFFF escape without complaint, so a
+    # mangled upstream payload reaches us as a lone surrogate. Minting an id must
+    # not be what fails the run.
+    assert deterministic_id("\ud800") != deterministic_id("\udfff")
+    assert deterministic_id("a", "\ud800") == deterministic_id("a", "\ud800")
+
+
 @given(_SAFE_PARTS)
 def test_is_deterministic(parts: list[str]) -> None:
     assert deterministic_id(*parts) == deterministic_id(*parts)
