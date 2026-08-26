@@ -82,7 +82,7 @@ Tasks only. Strategy, phase goals, workflow and the decision log live in `DEVELO
 - [x] Test coverage on SDK (unit + the fakeredis/httpx-mock integration paths)
 - [x] `mypy --strict` clean; public API typed and exported from `__init__.py`
 - [x] Docstrings + README usage example (the `WorkerApp(...).run()` pattern)
-- [ ] Build & publish **v0.1.0** to private Artifact Registry _(no publish job in `ci.yml` yet — the only Phase 8 item still open)_
+- [x] Cut **v0.1.0** — version bumped, annotated git tag, consumers pin by tag _(Artifact Registry deferred: a tag needs no registry, no publish pipeline, no private-index credentials)_
 
 ---
 

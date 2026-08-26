@@ -12,10 +12,13 @@ its first consumer, the `proba-markets-analysis` (sports-betting) pipeline.
 
 ## Status
 
-Pre-release (`0.1.0-dev`). The package is being built phase by phase; the public
-contract (`WorkerApp`, `Source`, `Sink`, `RunContext`) lands in Phase 1. During
-co-development the SDK stays in `0.x` and consumers depend on it via an editable
-local path.
+`v0.1.0` — the first cut. The public contract (`WorkerApp`, `Source`, `Sink`,
+`RunContext`) is in place and changing it is a SemVer event. Still `0.x` while
+co-development continues, so the contract can move on a minor bump.
+
+Distributed by **git tag**, not a package registry: a tag pins an immutable
+version without a publish pipeline or private-index credentials in CI and in
+every image build.
 
 ## Usage
 
@@ -96,14 +99,23 @@ uv run mypy                # strict type-check
 uv run pytest              # tests
 ```
 
-## Using it as a consumer (co-development)
+## Using it as a consumer
 
-Depend on the SDK via an editable local path while both repos evolve together:
+Pin a released version by tag:
 
 ```toml
 # <your-project>/pyproject.toml
 dependencies = ["data-pipeline-core"]
 
+[tool.uv.sources]
+data-pipeline-core = { git = "ssh://git@github.com/mdolmen/data-pipeline-core", tag = "v0.1.0" }
+```
+
+While co-developing the SDK against a consumer, swap that for an editable local
+path so edits land without a tag-and-bump cycle — the two repos then have to sit
+side by side:
+
+```toml
 [tool.uv.sources]
 data-pipeline-core = { path = "../data-pipeline-core", editable = true }
 ```

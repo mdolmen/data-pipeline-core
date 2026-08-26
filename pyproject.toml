@@ -1,6 +1,6 @@
 [project]
 name = "data-pipeline-core"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Reusable plumbing for GCP data-ingestion pipelines: worker runtime, resilience, observability, and storage adapters."
 readme = "README.md"
 requires-python = ">=3.11"

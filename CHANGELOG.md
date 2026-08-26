@@ -6,7 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/). During
 co-development the SDK stays in `0.x`; breaking changes are free until `v0.1.0`
 is cut.
 
-## [Unreleased] — `0.1.0-dev`
+## [Unreleased]
+
+## [0.1.0] — 2026-08-26
+
+First cut. Distributed by git tag rather than a package registry — consumers pin
+`{ git = "…", tag = "v0.1.0" }`, or keep an editable path while co-developing.
 
 ### Changed
 
@@ -169,6 +174,7 @@ Polytricks instance — see `DEVELOPMENT.md`.
 
 | Item | Decision | Rationale |
 |---|---|---|
+| v0.1.0 distribution | Git tag, not a package registry | A tag pins an immutable version with no publish pipeline and no private-index credentials in CI or in the worker image build — the hidden cost of a private Artifact Registry, which stays available if a consumer outside this account ever needs one. |
 | Runtime dependencies | Deferred — added per phase | Tracer-bullet, bottom-up; avoid speculative weight. The package ships with only what a real consumer demands (e.g. `dlt` in Phase 1, `prometheus-client` in Phase 3). |
 | `prometheus-client` | SDK, runtime dep (Phase 3) | Promoted from dev once `obs/metrics.py` shipped, as planned. |
 | Standard metric series (names + labels) | SDK, frozen surface | Shared Grafana dashboards across consumers; renaming/relabeling is forbidden. Series whose mechanism is unbuilt are declared at 0. |
