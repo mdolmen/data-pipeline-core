@@ -146,6 +146,15 @@ is cut.
 
 ### Fixed
 
+- **Transport failures now reach the metrics** (`ingestion/http.py`,
+  `obs/metrics.py`). A DNS, connect, TLS or timeout error never produced a
+  response, so it touched neither `request_count` nor `http_status_total`: an
+  unreachable source exported `request_rate=0` with no status sample, which on a
+  dashboard is indistinguishable from an idle run. Each failed attempt is now
+  counted and recorded as `http_status_total{code="transport_error"}`. That also
+  re-bounds `proxy_usage_ratio`, which reached 4.0 on a series documented `0..1`
+  because `proxied_count` counted attempts while `request_count` skipped the
+  failed ones.
 - **PEP 561 `py.typed` marker** added to the package, so consumers see the
   SDK's inline type hints instead of treating it as untyped. Surfaced by
   `proba-markets-analysis` enabling `mypy --strict`: without the marker, every
@@ -163,6 +172,7 @@ Polytricks instance — see `DEVELOPMENT.md`.
 | Runtime dependencies | Deferred — added per phase | Tracer-bullet, bottom-up; avoid speculative weight. The package ships with only what a real consumer demands (e.g. `dlt` in Phase 1, `prometheus-client` in Phase 3). |
 | `prometheus-client` | SDK, runtime dep (Phase 3) | Promoted from dev once `obs/metrics.py` shipped, as planned. |
 | Standard metric series (names + labels) | SDK, frozen surface | Shared Grafana dashboards across consumers; renaming/relabeling is forbidden. Series whose mechanism is unbuilt are declared at 0. |
+| Transport errors as `code="transport_error"` | SDK, sentinel label *value* — not a new series | A failure with no HTTP status still needs a home. A value on `http_status_total` leaves the frozen surface and existing panels untouched, where a new `http_transport_errors_total` would amend §8 and split "attempts that failed" across two series. Non-numeric on purpose, so `code=~"5.."` does not match it. |
 | Metrics push transport | PushGateway built; GMP remote-write/OTLP deferred | The preferred transport needs a real GCP target to verify; the push-at-exit mechanism is generic, the transport is config. |
 | Push failures | Swallowed (logged), never fail the run | Observability must not break ingestion. |
 | HTTP client + circuit breaker | SDK, on `ctx.http` | Generic ingestion plumbing; the `fetch()` that uses it stays in the project. |
