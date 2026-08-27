@@ -8,6 +8,20 @@ is cut.
 
 ## [Unreleased]
 
+### Added
+
+- **`http_retry_statuses`** — extra HTTP statuses the client retries like a 5xx,
+  empty by default. A 4xx has been unretryable on the grounds that it is a
+  verdict, not a hiccup; anti-bot edges break that rule. Unibet's rejects ~3% of
+  catalog reads with a 403 that a fresh attempt seconds later clears (the
+  handshake and every odds call in the same run return 200, and the egress IP
+  differs every time), so the retry budget that already existed went unspent and
+  recovery fell to a whole Cloud Run task retry — which on 2026-08-14 also drew a
+  403 and lost that hour of odds for good. Opt-in per source rather than
+  fleet-wide, because a bookmaker that 403s because it really has blocked us
+  should not be hit four times in three seconds. 429 is unaffected: it keeps its
+  own path into the breaker and is still never retried.
+
 ## [0.2.0] — 2026-08-27
 
 ### Added
@@ -205,6 +219,7 @@ Polytricks instance — see `DEVELOPMENT.md`.
 | HTTP client + circuit breaker | SDK, on `ctx.http` | Generic ingestion plumbing; the `fetch()` that uses it stays in the project. |
 | Retry/backoff/UA list, breaker threshold/cooldown | SDK, config defaults | Mechanism generic, values betting-tuned and overridable (Polytricks can loosen them). |
 | 429 handling | Recorded with breaker, not retried | Retrying a rate-limit signal worsens it; the breaker is the correct response. |
+| 4xx retry (`http_retry_statuses`) | SDK, config — opt-in per source, empty default | Retry-on-status is plumbing the client already owns, so the mechanism belongs here; *which* statuses are transient is a property of one target's edge (unibet 403s ~3% of catalog reads, then serves the retry), so the value stays with the consumer. Fleet-wide would turn a real block into four requests in three seconds. |
 | `CircuitOpenError` on open breaker | SDK raises; source decides | The project's `fetch()` owns the loop, so it chooses to stop/partial-yield — the SDK doesn't impose a policy. |
 | Breaker cross-run persistence | Deferred to Phase 5 (Redis) | In-memory per run is enough to validate the mechanism; surviving restarts needs the Redis store. |
 | IP guard + proxy router | SDK, config-gated | Generic density→mode→proxy mechanism; thresholds are config defaults (betting-tuned). Disabled when `redis_url`/`proxy` unset → Polytricks keeps retry/jitter only. |

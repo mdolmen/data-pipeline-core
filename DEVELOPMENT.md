@@ -176,3 +176,4 @@ what is **deferred** (generalize on the 2nd real usage). Maintain in
 | `WriteResult.byte_count` | SDK, optional | sinks that can report volume cheaply do (raw landing); others leave `None` → `bytes_written_total` stays flat, no forced cost on every sink |
 | OTLP push over PushGateway | SDK, preferred path | short-lived jobs → write to the backend at exit; a PushGateway needs an always-on box + scraper. PushGateway kept as fallback |
 | OTLP/HTTP-JSON (vs Prometheus remote-write) | SDK | the chosen backend (Grafana Cloud) surfaces OTLP for custom metrics, not remote-write; OTLP-JSON is also zero-dep (no protobuf/snappy) — simpler than the remote-write emitter it replaced |
+| 4xx retry (`http_retry_statuses`) | SDK, config — opt-in per source | retry-on-status is plumbing the client owns; *which* 4xx is transient is a property of one target's edge (unibet 403s ~3% of catalog reads, then serves the retry), so the value stays with the consumer |
