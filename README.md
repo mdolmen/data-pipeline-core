@@ -12,9 +12,9 @@ its first consumer, the `proba-markets-analysis` (sports-betting) pipeline.
 
 ## Status
 
-`v0.1.0` — the first cut. The public contract (`WorkerApp`, `Source`, `Sink`,
-`RunContext`) is in place and changing it is a SemVer event. Still `0.x` while
-co-development continues, so the contract can move on a minor bump.
+`v0.2.0`. The public contract (`WorkerApp`, `Source`, `Sink`, `RunContext`) is
+in place and changing it is a SemVer event. Still `0.x` while co-development
+continues, so the contract can move on a minor bump.
 
 Distributed by **git tag**, not a package registry: a tag pins an immutable
 version without a publish pipeline or private-index credentials in CI and in
@@ -87,6 +87,30 @@ Pass `primary_key` and replaying becomes an upsert rather than a duplicate;
 A single worker can also do all of it in one pass by wiring
 `source + transform + sink` together.
 
+### Checking your implementations
+
+The protocols are `runtime_checkable`, so the type checker confirms the shape
+but nothing confirms the behaviour — and that is what breaks silently. Check it:
+
+```python
+from data_pipeline_core.testing import check_sink_contract, check_source_contract
+
+
+def test_my_sink_honours_the_contract() -> None:
+    check_sink_contract(MySink(), [{"id": 1}, {"id": 2}])
+
+
+def test_my_source_streams() -> None:
+    check_source_contract(MySource())
+```
+
+That catches the mistakes types can't: a sink calling `len()` or re-iterating
+its input (fine at ten records, fatal at ten million), a source materialising
+instead of yielding, a transform mutating a record its caller still owns.
+`make_test_context()` builds the `RunContext` a source needs, refusing any
+outbound call you didn't mock. The checks raise `AssertionError`, so no test
+framework is imposed.
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.11+.
@@ -108,7 +132,7 @@ Pin a released version by tag:
 dependencies = ["data-pipeline-core"]
 
 [tool.uv.sources]
-data-pipeline-core = { git = "ssh://git@github.com/mdolmen/data-pipeline-core", tag = "v0.1.0" }
+data-pipeline-core = { git = "ssh://git@github.com/mdolmen/data-pipeline-core", tag = "v0.2.0" }
 ```
 
 While co-developing the SDK against a consumer, swap that for an editable local

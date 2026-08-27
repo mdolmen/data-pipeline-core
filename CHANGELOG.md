@@ -8,6 +8,27 @@ is cut.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-27
+
+### Added
+
+- **Contract conformance kit** (`data_pipeline_core.testing`). The protocols are
+  `runtime_checkable`, which verifies only that attributes exist; the
+  behavioural half was uncheckable, and it is the half a consumer breaks
+  silently — a sink that calls `list()` on its input works at ten records and
+  holds a run in memory at ten million, a source that returns a list loses the
+  streaming property the run loop depends on, a transform that mutates its
+  argument corrupts a record the caller still owns and another worker may
+  replay. `check_sink_contract` / `check_source_contract` /
+  `check_transform_contract` assert that behaviour, and `make_test_context()`
+  replaces the `fetch(None)  # type: ignore` pattern with a real context whose
+  default client fails loudly on any unmocked outbound call. Framework-agnostic
+  — the checks raise `ContractViolation` (an `AssertionError`) rather than
+  importing pytest, so the SDK takes no test-time dependency. All four shipped
+  adapters are checked against it (`tests/test_conformance.py`), which makes it
+  the compatibility spec to run when the contract grows a batch-oriented or
+  long-running variant.
+
 ## [0.1.0] — 2026-08-26
 
 First cut. Distributed by git tag rather than a package registry — consumers pin
