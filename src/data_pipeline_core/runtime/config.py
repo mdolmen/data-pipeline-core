@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 30.0
     http_max_retries: int = 3
     http_backoff_base_seconds: float = 0.5
+    # Extra statuses retried like a 5xx. Empty by default: a 4xx is a verdict,
+    # not a hiccup, and retrying a real block only feeds it. Anti-bot edges are
+    # the exception — one that rejects a small share of reads with a 403 the
+    # next attempt clears is transient, so the source that faces one opts in
+    # (per source, not fleet-wide). 429 is unaffected: it keeps its own path
+    # into the circuit breaker below, and is never retried.
+    http_retry_statuses: tuple[int, ...] = ()
     # Browser-TLS impersonation for anti-bot targets (JA3/JA4 fingerprinting).
     # None → standard httpx; a curl_cffi profile (e.g. "chrome") → browser TLS.
     impersonate: str | None = None

@@ -65,6 +65,46 @@ def test_retries_5xx_then_succeeds(httpx_mock: HTTPXMock) -> None:
     assert registry.get_sample_value("http_status_total", {**base, "code": "200"}) == 1
 
 
+def test_4xx_is_not_retried_by_default(httpx_mock: HTTPXMock) -> None:
+    # A 4xx is a verdict, not a hiccup: retrying a real block only feeds it.
+    httpx_mock.add_response(status_code=403, is_reusable=True)
+    client, _, _ = _client(http_max_retries=2)
+
+    response = client.get("https://api.test/odds")
+
+    assert response.status_code == 403
+    assert client.request_count == 1
+
+
+def test_retries_opted_in_status_then_succeeds(httpx_mock: HTTPXMock) -> None:
+    # An anti-bot edge that rejects a small share of reads with a 403 the next
+    # attempt clears: the source opts that status in and the run survives in
+    # process, instead of failing and leaning on a whole container retry.
+    httpx_mock.add_response(status_code=403)
+    httpx_mock.add_response(status_code=200, text="ok")
+    client, _, registry = _client(http_max_retries=2, http_retry_statuses=(403,))
+
+    response = client.get("https://api.test/odds")
+
+    assert response.status_code == 200
+    assert client.request_count == 2
+    base = {"source": "s", "stage": "ingest"}
+    assert registry.get_sample_value("http_status_total", {**base, "code": "403"}) == 1
+    assert registry.get_sample_value("http_status_total", {**base, "code": "200"}) == 1
+
+
+def test_opted_in_status_returns_after_last_attempt(httpx_mock: HTTPXMock) -> None:
+    # Opting in buys attempts, not success: a persistent block still comes back
+    # to the source as a 403 so it can fail the run.
+    httpx_mock.add_response(status_code=403, is_reusable=True)
+    client, _, _ = _client(http_max_retries=2, http_retry_statuses=(403,))
+
+    response = client.get("https://api.test/odds")
+
+    assert response.status_code == 403
+    assert client.request_count == 3
+
+
 def test_rotates_user_agent_from_settings(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(status_code=200)
     client, _, _ = _client()

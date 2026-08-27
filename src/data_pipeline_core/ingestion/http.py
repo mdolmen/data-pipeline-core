@@ -1,7 +1,8 @@
 """Instrumented HTTP client used by a ``Source`` (via ``ctx.http``).
 
 Wraps ``httpx`` with the generic ingestion plumbing: retry with jitter on
-transient failures (network / 5xx), User-Agent rotation, per-response metrics
+transient failures (network / 5xx, plus any ``http_retry_statuses`` the consumer
+opts into), User-Agent rotation, per-response metrics
 (``http_status_total``, request count → ``request_rate``), circuit-breaker
 integration, and IP-guard-driven mode switching (extra jitter in Warning, proxy
 routing in Aggressive → feeds ``proxy_usage_ratio``). A 429 is recorded with the
@@ -124,7 +125,11 @@ class HttpClient:
             if response.status_code == 429:
                 self._breaker.record_failure()
                 return response
-            if response.status_code >= 500 and attempt + 1 < attempts:
+            retryable = (
+                response.status_code >= 500
+                or response.status_code in self._settings.http_retry_statuses
+            )
+            if retryable and attempt + 1 < attempts:
                 self._backoff(attempt)
                 continue
             if response.is_success:
